@@ -1,0 +1,93 @@
+.error-boundary {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+  color: #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+}
+
+.error-content {
+  background: rgba(15, 23, 42, 0.95);
+  border: 1px solid #475569;
+  border-radius: 12px;
+  padding: 2rem;
+  max-width: 500px;
+  text-align: center;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+}
+
+.error-content h2 {
+  margin: 0 0 1rem 0;
+  font-size: 1.5rem;
+  color: #ef4444;
+}
+
+.error-content p {
+  margin: 0 0 1.5rem 0;
+  color: #94a3b8;
+  line-height: 1.5;
+}
+
+.error-actions {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  margin-bottom: 1rem;
+}
+
+.error-btn {
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.retry-btn {
+  background: #3b82f6;
+  color: white;
+}
+
+.retry-btn:hover {
+  background: #2563eb;
+}
+
+.close-btn {
+  background: #6b7280;
+  color: white;
+}
+
+.close-btn:hover {
+  background: #4b5563;
+}
+
+.error-details {
+  margin-top: 1rem;
+  text-align: left;
+}
+
+.error-details summary {
+  cursor: pointer;
+  color: #f59e0b;
+  font-weight: 500;
+  margin-bottom: 0.5rem;
+}
+
+.error-stack {
+  background: #0f172a;
+  border: 1px solid #374151;
+  border-radius: 4px;
+  padding: 1rem;
+  font-size: 0.8rem;
+  color: #e5e7eb;
+  overflow-x: auto;
+  white-space: pre-wrap;
+}

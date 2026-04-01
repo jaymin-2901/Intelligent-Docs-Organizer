@@ -1,0 +1,152 @@
+.document-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 16px;
+  padding: 16px;
+}
+
+.document-grid.loading,
+.document-grid.empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+  grid-column: 1 / -1;
+}
+
+.empty-state {
+  text-align: center;
+  color: #666;
+}
+
+.empty-icon {
+  font-size: 64px;
+  display: block;
+  margin-bottom: 16px;
+}
+
+.empty-state h3 {
+  color: #888;
+  margin-bottom: 8px;
+}
+
+.document-card {
+  background: #1a1a2e;
+  border-radius: 12px;
+  padding: 16px;
+  cursor: pointer;
+  transition: all 0.3s;
+  border: 1px solid transparent;
+}
+
+.document-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+  border-color: #6366f1;
+}
+
+.document-card.selected {
+  border-color: #6366f1;
+  background: #1f1f3a;
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.file-type-badge {
+  background: #2a2a4a;
+  color: #6366f1;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.bookmark-btn {
+  background: transparent;
+  border: none;
+  font-size: 20px;
+  cursor: pointer;
+  color: #555;
+  transition: all 0.2s;
+}
+
+.bookmark-btn:hover,
+.bookmark-btn.bookmarked {
+  color: #fbbf24;
+}
+
+.card-body {
+  text-align: center;
+  padding: 12px 0;
+}
+
+.file-icon {
+  font-size: 48px;
+  margin-bottom: 8px;
+}
+
+.file-name {
+  color: #fff;
+  font-size: 13px;
+  font-weight: 500;
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.card-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #2a2a4a;
+}
+
+.category-badge {
+  font-size: 11px;
+}
+
+.category-badge .main-cat {
+  color: #6366f1;
+  font-weight: 500;
+}
+
+.category-badge .sub-cat {
+  color: #888;
+}
+
+.confidence-score {
+  color: #22c55e;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.keywords-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 12px;
+}
+
+.keyword-tag {
+  background: #2a2a4a;
+  color: #888;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 10px;
+}
+
+.card-meta {
+  display: flex;
+  justify-content: space-between;
+  color: #555;
+  font-size: 11px;
+  margin-top: 12px;
+}

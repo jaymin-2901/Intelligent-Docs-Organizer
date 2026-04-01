@@ -1,0 +1,12 @@
+opencv-python==4.8.1.78
+mediapipe==0.10.9
+numpy==1.24.3
+websockets==11.0.3
+asyncio
+logging
+dataclasses
+enum34
+collections
+typing
+time
+math

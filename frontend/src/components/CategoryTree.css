@@ -1,0 +1,134 @@
+.category-tree {
+  background: #1a1a2e;
+  border-radius: 12px;
+  padding: 16px;
+  height: 100%;
+  overflow-y: auto;
+}
+
+.category-tree.loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+}
+
+.loading-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid #333;
+  border-top-color: #6366f1;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.category-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #2a2a4a;
+}
+
+.category-header h3 {
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.refresh-btn {
+  background: transparent;
+  border: none;
+  color: #888;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.refresh-btn:hover {
+  background: #2a2a4a;
+  color: #fff;
+}
+
+.category-item {
+  display: flex;
+  align-items: center;
+  padding: 10px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-bottom: 4px;
+}
+
+.category-item:hover {
+  background: #2a2a4a;
+}
+
+.category-item.active {
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+}
+
+.category-item.all {
+  margin-bottom: 12px;
+}
+
+.expand-icon {
+  font-size: 10px;
+  color: #666;
+  margin-right: 8px;
+  width: 16px;
+  transition: transform 0.2s;
+}
+
+.category-icon {
+  margin-right: 10px;
+  font-size: 16px;
+}
+
+.category-name {
+  flex: 1;
+  color: #e0e0e0;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.category-item.active .category-name {
+  color: #fff;
+}
+
+.document-count {
+  background: #2a2a4a;
+  color: #888;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.category-item.active .document-count {
+  background: #1f1f3a;
+  color: #fff;
+}
+
+.sub-categories {
+  margin-left: 24px;
+  border-left: 2px solid #2a2a4a;
+  padding-left: 8px;
+}
+
+.category-item.sub {
+  padding: 8px 12px;
+}
+
+.category-item.sub .category-name {
+  font-size: 12px;
+  font-weight: 400;
+}

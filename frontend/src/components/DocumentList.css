@@ -1,0 +1,290 @@
+.document-list {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.document-list-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 200px;
+  padding: 20px;
+}
+
+.empty-state {
+  text-align: center;
+  color: #666;
+}
+
+.empty-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+  opacity: 0.5;
+}
+
+.empty-state h3 {
+  margin: 0 0 8px 0;
+  font-size: 16px;
+  color: #333;
+}
+
+.empty-state p {
+  margin: 0;
+  font-size: 14px;
+  color: #666;
+}
+
+.document-list-header {
+  padding: 8px 0;
+  border-bottom: 1px solid #e0e0e0;
+  margin-bottom: 8px;
+}
+
+.document-count {
+  font-size: 12px;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.document-list-items {
+  flex: 1;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #ccc transparent;
+}
+
+.document-list-items::-webkit-scrollbar {
+  width: 6px;
+}
+
+.document-list-items::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.document-list-items::-webkit-scrollbar-thumb {
+  background: #ccc;
+  border-radius: 3px;
+}
+
+.document-list-items::-webkit-scrollbar-thumb:hover {
+  background: #999;
+}
+
+.document-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 8px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 1px solid transparent;
+  margin-bottom: 4px;
+}
+
+.document-item:hover {
+  background: #f5f5f5;
+  border-color: #e0e0e0;
+}
+
+.document-item.active {
+  background: #e3f2fd;
+  border-color: #2196f3;
+}
+
+.document-icon {
+  font-size: 20px;
+  min-width: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 2px;
+}
+
+.document-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.document-name {
+  font-weight: 500;
+  color: #333;
+  font-size: 14px;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.document-item.active .document-name {
+  color: #1976d2;
+}
+
+.document-meta {
+  display: flex;
+  gap: 8px;
+  font-size: 11px;
+  color: #666;
+}
+
+.document-size,
+.document-date {
+  white-space: nowrap;
+}
+
+.document-date::before {
+  content: '•';
+  margin-right: 4px;
+  color: #ccc;
+}
+
+.document-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.document-tag {
+  background: #f0f0f0;
+  color: #666;
+  padding: 2px 6px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.document-item.active .document-tag {
+  background: #bbdefb;
+  color: #1976d2;
+}
+
+.document-tag-more {
+  background: #e0e0e0;
+  color: #999;
+  padding: 2px 6px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.document-actions {
+  display: flex;
+  align-items: center;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.document-item:hover .document-actions {
+  opacity: 1;
+}
+
+.delete-btn {
+  background: none;
+  border: none;
+  font-size: 16px;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  color: #999;
+  transition: all 0.2s ease;
+}
+
+.delete-btn:hover {
+  background: #ffebee;
+  color: #f44336;
+}
+
+.delete-confirmation {
+  display: flex;
+  gap: 4px;
+}
+
+.confirm-delete-btn,
+.cancel-delete-btn {
+  background: none;
+  border: none;
+  font-size: 14px;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.confirm-delete-btn:hover {
+  background: #e8f5e8;
+}
+
+.cancel-delete-btn:hover {
+  background: #ffebee;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .document-item {
+    padding: 8px 4px;
+    gap: 8px;
+  }
+  
+  .document-icon {
+    font-size: 18px;
+    min-width: 20px;
+  }
+  
+  .document-name {
+    font-size: 13px;
+  }
+  
+  .document-meta {
+    font-size: 10px;
+  }
+  
+  .document-actions {
+    opacity: 1;
+  }
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  .document-item {
+    color: #1E293B;
+  }
+  
+  .document-item:hover {
+    background: #333;
+    border-color: #555;
+  }
+  
+  .document-item.active {
+    background: #1a237e;
+    border-color: #3f51b5;
+  }
+  
+  .document-name {
+    color: #1E293B;
+  }
+  
+  .document-item.active .document-name {
+    color: #bbdefb;
+  }
+  
+  .document-meta {
+    color: #ccc;
+  }
+  
+  .document-tag {
+    background: #444;
+    color: #ccc;
+  }
+  
+  .document-item.active .document-tag {
+    background: #3f51b5;
+    color: #bbdefb;
+  }
+}
