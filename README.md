@@ -59,4 +59,3 @@ See `docs/ARCHITECTURE.md` for details.
 ## Deployment
 
 Detailed deployment instructions (Docker, VPS, and GitHub workflow) are available in `docs/DEPLOYMENT.md`.
-
