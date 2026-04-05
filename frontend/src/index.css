@@ -1,16 +1,111 @@
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Manrope:wght@400;500;600;700;800&display=swap');
+
+:root {
+  --bg-deep: #0f2435;
+  --bg-mid: #1f3a50;
+  --bg-warm: #f5f1e8;
+
+  --surface-0: #ffffff;
+  --surface-1: #f5f8fb;
+  --surface-2: #eaf1f6;
+
+  --text-primary: #10283a;
+  --text-secondary: #345066;
+  --text-muted: #6a8194;
+
+  --border-soft: #d0dde8;
+  --border-strong: #b8cad8;
+
+  --accent: #0e7a88;
+  --accent-strong: #0b5d69;
+  --accent-soft: #d6edf0;
+  --accent-gold: #b98b35;
+
+  --success: #1d7a56;
+  --warning: #c77b2a;
+  --danger: #b4473d;
+
+  --shadow-sm: 0 4px 14px rgba(11, 39, 61, 0.08);
+  --shadow-md: 0 12px 30px rgba(11, 39, 61, 0.14);
+  --shadow-lg: 0 24px 60px rgba(11, 39, 61, 0.22);
+
+  --glass-bg: rgba(255, 255, 255, 0.05);
+  --glass-border: rgba(255, 255, 255, 0.1);
+  --glass-blur: blur(10px);
+}
+
 * {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
 }
 
-body {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  background: #0f172a;
-  color: #0b1325;
+html,
+body,
+#root {
   min-height: 100vh;
 }
 
-#root {
+body {
+  font-family: 'Manrope', 'Segoe UI', Tahoma, sans-serif;
+  color: var(--text-primary);
+  background:
+    radial-gradient(1200px 700px at 8% -10%, rgba(14, 122, 136, 0.22), transparent 55%),
+    radial-gradient(900px 520px at 95% 0%, rgba(185, 139, 53, 0.14), transparent 58%),
+    linear-gradient(140deg, var(--bg-deep) 0%, var(--bg-mid) 35%, var(--bg-warm) 92%);
+  line-height: 1.45;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: 'Fraunces', Georgia, serif;
+  letter-spacing: 0.01em;
+}
+
+a {
+  color: var(--accent-strong);
+}
+
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
+}
+
+button {
+  transition: transform 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease;
+}
+
+button:active {
+  transform: translateY(1px);
+}
+
+.page-loading {
   min-height: 100vh;
+  display: grid;
+  place-content: center;
+  gap: 0.75rem;
+  text-align: center;
+  color: #f2f7fb;
+}
+
+.page-loading__spinner {
+  width: 40px;
+  height: 40px;
+  margin: 0 auto;
+  border: 3px solid rgba(232, 244, 248, 0.26);
+  border-top-color: #ffffff;
+  border-radius: 50%;
+  animation: app-spin 0.9s linear infinite;
+}
+
+@keyframes app-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }

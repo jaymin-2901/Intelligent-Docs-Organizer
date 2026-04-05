@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { toast } from '../components/Toast';
@@ -19,7 +19,13 @@ export default function Signup() {
   const { signup, user } = useAuth();
   const navigate = useNavigate();
 
-  if (user) { navigate('/dashboard', { replace: true }); return null; }
+  useEffect(() => {
+    if (user) {
+      navigate('/dashboard/doc-view', { replace: true });
+    }
+  }, [navigate, user]);
+
+  if (user) return null;
 
   const [form, setForm] = useState({ fullName: '', email: '', mobile: '', password: '', confirmPassword: '' });
   const [errors, setErrors] = useState({});
@@ -60,7 +66,7 @@ export default function Signup() {
     try {
       const data = await signup(form);
       toast.success(data.message || 'Account created!');
-      navigate('/dashboard', { replace: true });
+      navigate('/dashboard/doc-view', { replace: true });
     } catch (err) {
       const msg = err.response?.data?.message || 'Signup failed.';
       toast.error(msg);

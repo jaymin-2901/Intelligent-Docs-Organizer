@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { toast } from '../components/Toast';
@@ -8,10 +8,15 @@ export default function Login() {
   const { login, user } = useAuth();
   const navigate         = useNavigate();
   const location         = useLocation();
-  const from             = location.state?.from?.pathname || '/dashboard';
+  const from             = location.state?.from?.pathname || '/dashboard/doc-view';
 
-  // Redirect if already logged in
-  if (user) { navigate(from, { replace: true }); return null; }
+  useEffect(() => {
+    if (user) {
+      navigate(from, { replace: true });
+    }
+  }, [from, navigate, user]);
+
+  if (user) return null;
 
   const [form, setForm]         = useState({ email: '', password: '', rememberMe: false });
   const [errors, setErrors]     = useState({});

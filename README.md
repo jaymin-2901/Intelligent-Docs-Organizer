@@ -17,7 +17,7 @@ A full-stack desktop app (Electron) for AI-powered document management, categori
 ├── dist/             # Builds
 ├── TODO.md           # Progress tracker
 ├── .env.example      # Copy to .env
-└── docker-compose.yml (planned)
+└── docker-compose.yml # Docker deployment
 ```
 
 ## 🚀 Quick Start
@@ -55,4 +55,8 @@ A full-stack desktop app (Electron) for AI-powered document management, categori
 - SQLite persistence
 
 See `docs/ARCHITECTURE.md` for details.
+
+## Deployment
+
+Detailed deployment instructions (Docker, VPS, and GitHub workflow) are available in `docs/DEPLOYMENT.md`.
 

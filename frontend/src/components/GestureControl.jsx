@@ -84,13 +84,16 @@ const GestureControl = ({ onGesture }) => {
             <div className="gesture-legend">
               <h4>Available Gestures:</h4>
               <ul>
-                <li>👋 <strong>Swipe Left</strong> → Next Document</li>
-                <li>👋 <strong>Swipe Right</strong> → Previous Document</li>
-                <li>👍 <strong>Thumbs Up</strong> → Confirm</li>
-                <li>✌️ <strong>Peace Sign</strong> → Fullscreen</li>
-                <li>✊ <strong>Fist</strong> → Pause</li>
-                <li>🖐️ <strong>Open Palm</strong> → Menu</li>
-                <li>👆 <strong>Pointing</strong> → Select</li>
+                <li>👋 <strong>Left Movement</strong> (open palm) → Next Page</li>
+                <li>👋 <strong>Right Movement</strong> (open/closed hand) → Previous Page</li>
+                <li>⬆️⬇️ <strong>Up/Down Movement</strong> → Scroll</li>
+                <li>🤏 <strong>Pinch In/Out</strong> → Zoom Out/In</li>
+                <li>👌 <strong>OK Sign</strong> → Reset Zoom (100%)</li>
+                <li>✌️ <strong>Peace Sign</strong> → Generate AI Summary</li>
+                <li>👆 <strong>Pointing</strong> → Next Document</li>
+                <li>🤘 <strong>Rock/YoYo</strong> → Fullscreen</li>
+                <li>3️⃣ <strong>Three Fingers</strong> → Gesture Guide</li>
+                <li>4️⃣ <strong>Four Fingers</strong> → Analytics</li>
               </ul>
             </div>
           </div>

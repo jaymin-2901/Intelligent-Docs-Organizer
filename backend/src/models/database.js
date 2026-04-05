@@ -96,6 +96,23 @@ class Database {
         duration_seconds INTEGER,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE SET NULL
+      )`,
+
+      `CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        full_name TEXT NOT NULL,
+        email TEXT NOT NULL UNIQUE,
+        mobile TEXT NOT NULL,
+        password_hash TEXT NOT NULL,
+        role TEXT NOT NULL DEFAULT 'user',
+        is_active INTEGER NOT NULL DEFAULT 1,
+        last_login DATETIME,
+        login_attempts INTEGER NOT NULL DEFAULT 0,
+        lock_until DATETIME,
+        password_reset_token TEXT,
+        password_reset_expires DATETIME,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )`
     ];
     
@@ -103,7 +120,9 @@ class Database {
       'CREATE INDEX IF NOT EXISTS idx_documents_category ON documents(main_category, sub_category)',
       'CREATE INDEX IF NOT EXISTS idx_documents_created ON documents(created_at)',
       'CREATE INDEX IF NOT EXISTS idx_keywords_keyword ON keywords(keyword)',
-      'CREATE INDEX IF NOT EXISTS idx_analytics_event ON analytics(event_type, created_at)'
+      'CREATE INDEX IF NOT EXISTS idx_analytics_event ON analytics(event_type, created_at)',
+      'CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)',
+      'CREATE INDEX IF NOT EXISTS idx_users_active ON users(is_active)'
     ];
     
     for (const sql of tables) {

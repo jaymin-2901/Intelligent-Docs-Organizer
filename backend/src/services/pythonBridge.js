@@ -4,9 +4,9 @@ const config = require('../config/config');
 
 class PythonBridge {
   constructor() {
-    this.scriptPath = path.join(__dirname, '../../../python/document_ai.py');
-    this.pythonCommand = process.platform === 'win32' ? 'python' : 'python3';
-    this.timeout = 60000;
+    this.scriptPath = config.pythonEngine?.scriptPath || path.join(__dirname, '../../../python/document_ai.py');
+    this.pythonCommand = config.pythonEngine?.pythonCommand || (process.platform === 'win32' ? 'python' : 'python3');
+    this.timeout = config.pythonEngine?.timeout || 60000;
   }
   
   async processDocument(filePath, fileType) {

@@ -1,6 +1,6 @@
 /**
  * GestureService — singleton WebSocket client for the Python gesture server.
- * Action names are kept in sync with App.jsx handleGestureDetected switch cases.
+ * Action names are kept in sync with DashboardContent.jsx gesture switch cases.
  */
 class GestureService {
   constructor() {
@@ -20,25 +20,25 @@ class GestureService {
       reconnectBaseMs: 2000,
     };
 
-    // Maps Python gesture name  →  action name used in App.jsx switch()
+    // Maps Python gesture name  →  action name used in dashboard gesture routing.
     this.GESTURE_ACTION_MAP = {
       'thumbs_up':   'bookmark',
       'peace':       'summary',
       'open_palm':   'showDocuments',
       'fist':        'close',
       'pointing':    'select',
-      'rock_sign':   'rock',
+      'rock_sign':   'customRock',
       'ok_sign':     'confirm',
-      'three':       'three',
-      'four':        'four',
-      'swipe_left':  'prevPage',
-      'swipe_right': 'nextPage',
-      'swipe_up':    'prevDocument',
-      'swipe_down':  'nextDocument',
+      'three':       'customThree',
+      'four':        'customFour',
+      'swipe_left':  'nextPage',
+      'swipe_right': 'prevPage',
+      'swipe_up':    'scrollUp',
+      'swipe_down':  'scrollDown',
       'pinch_in':    'zoomOut',
       'pinch_out':   'zoomIn',
       'pinch_close': 'select',
-      'pinch_open':  'zoomReset',
+      'pinch_open':  'confirm',
     };
 
     console.log('[GestureService] Initialised');

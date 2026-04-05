@@ -7,25 +7,25 @@ const GESTURE_GROUPS = [
   {
     id: 'pages',
     title: 'Page Navigation',
-    subtitle: 'Horizontal swipe with 2+ fingers extended',
+    subtitle: 'Horizontal hand movement with shape rules',
     icon: '📖',
     color: '#38BDF8',
     type: 'motion',
     gestures: [
-      { id: 'swipe_left',  emoji: '◀️', name: 'Swipe Left',  action: 'Previous Page', fingers: [0,1,1,0,0], motion: 'left',  tip: 'Extend index + middle, swipe LEFT on screen quickly' },
-      { id: 'swipe_right', emoji: '▶️', name: 'Swipe Right', action: 'Next Page',     fingers: [0,1,1,0,0], motion: 'right', tip: 'Extend index + middle, swipe RIGHT on screen quickly' },
+      { id: 'swipe_left',  emoji: '◀️', name: 'Swipe Left',  action: 'Next Page',     fingers: [1,1,1,1,1], motion: 'left',  tip: 'Open palm (all 5 fingers), then move LEFT quickly to go to the next page' },
+      { id: 'swipe_right', emoji: '▶️', name: 'Swipe Right', action: 'Previous Page', fingers: [1,1,1,1,1], motion: 'right', tip: 'Move RIGHT quickly with open palm or closed fist to go to the previous page' },
     ],
   },
   {
     id: 'scroll',
     title: 'Page Scrolling',
-    subtitle: 'Vertical swipe with 2+ fingers — reads page content',
+    subtitle: 'Vertical movement only scrolls current page content',
     icon: '📜',
     color: '#A78BFA',
     type: 'motion',
     gestures: [
-      { id: 'swipe_up',   emoji: '⬆️', name: '2-Finger Up',   action: 'Scroll Up (or Prev Page at top)',    fingers: [0,1,1,0,0], motion: 'up',   tip: 'Extend 2 fingers, move hand UP — scrolls page content up' },
-      { id: 'swipe_down', emoji: '⬇️', name: '2-Finger Down', action: 'Scroll Down (or Next Page at bottom)', fingers: [0,1,1,0,0], motion: 'down', tip: 'Extend 2 fingers, move hand DOWN — scrolls page content down' },
+      { id: 'swipe_up',   emoji: '⬆️', name: '2-Finger Up',   action: 'Scroll Up',   fingers: [0,1,1,0,0], motion: 'up',   tip: 'Extend 2 fingers, move hand UP — this only scrolls current page content' },
+      { id: 'swipe_down', emoji: '⬇️', name: '2-Finger Down', action: 'Scroll Down', fingers: [0,1,1,0,0], motion: 'down', tip: 'Extend 2 fingers, move hand DOWN — this only scrolls current page content' },
     ],
   },
   {
@@ -49,10 +49,10 @@ const GESTURE_GROUPS = [
     type: 'static',
     gestures: [
       { id: 'thumbs_up', emoji: '👍', name: 'Thumbs Up', action: 'Bookmark',       fingers: [1,0,0,0,0], tip: 'ONLY thumb pointing UP — curl all other fingers tightly' },
-      { id: 'peace',     emoji: '✌️', name: 'Peace Sign', action: 'AI Summary',    fingers: [0,1,1,0,0], tip: 'Index + middle extended, ring + pinky curled — hold STILL' },
+      { id: 'peace',     emoji: '✌️', name: 'Peace Sign', action: 'Generate AI Summary', fingers: [0,1,1,0,0], tip: 'Index + middle extended, ring + pinky curled — hold STILL' },
       { id: 'fist',      emoji: '✊', name: 'Fist',       action: 'Close Document', fingers: [0,0,0,0,0], tip: 'ALL fingers tightly closed into fist — hold steady' },
       { id: 'pointing',  emoji: '☝️', name: 'Point',      action: 'Select Next Doc', fingers: [0,1,0,0,0], tip: 'ONLY index finger up — all others curled' },
-      { id: 'ok_sign',   emoji: '👌', name: 'OK Sign',    action: 'Confirm',       fingers: [1,1,1,1,0], special: 'ok', tip: 'Touch thumb tip to index tip — extend middle + ring' },
+      { id: 'ok_sign',   emoji: '👌', name: 'OK Sign',    action: 'Reset Zoom (100%)', fingers: [1,1,1,1,0], special: 'ok', tip: 'Touch thumb tip to index tip — extend middle + ring' },
     ],
   },
   {
@@ -64,8 +64,8 @@ const GESTURE_GROUPS = [
     type: 'static',
     gestures: [
       { id: 'open_palm', emoji: '✋', name: 'Open Palm',      action: 'Show Documents',  fingers: [1,1,1,1,1], tip: 'ALL 5 fingers spread wide open — hold completely still' },
-      { id: 'rock_sign', emoji: '🤘', name: 'Rock Sign',     action: 'Toggle View Mode', fingers: [0,1,0,0,1], tip: 'ONLY index + pinky up — middle + ring curled' },
-      { id: 'three',     emoji: '3️⃣', name: 'Three Fingers', action: 'Show Categories',  fingers: [0,1,1,1,0], tip: 'Index + middle + ring up — pinky curled, thumb optional' },
+      { id: 'rock_sign', emoji: '🤘', name: 'Rock / YoYo Sign', action: 'Toggle Fullscreen View', fingers: [0,1,0,0,1], tip: 'ONLY index + pinky up — middle + ring curled' },
+      { id: 'three',     emoji: '3️⃣', name: 'Three Fingers', action: 'Open Gesture Guide', fingers: [0,1,1,1,0], tip: 'Index + middle + ring up — pinky curled, thumb optional' },
       { id: 'four',      emoji: '4️⃣', name: 'Four Fingers',  action: 'Show Analytics',   fingers: [0,1,1,1,1], tip: 'All 4 fingers up — THUMB must be tucked down' },
     ],
   },
@@ -246,9 +246,9 @@ const GestureGuide = () => {
             <div className="gg-conflict-pair">
               <span className="gg-conflict-left">✌️ Peace</span>
               <span className="gg-conflict-vs">vs</span>
-              <span className="gg-conflict-right">◀️▶️ Swipe</span>
+              <span className="gg-conflict-right">🌊 Motion Gestures</span>
             </div>
-            <p>Both use 2 fingers. <strong>Key: motion lockout</strong></p>
+            <p>Similar finger shapes can overlap. <strong>Key: motion lockout</strong></p>
             <div className="gg-conflict-solution">
               <span className="gg-sol-do">✅ Peace:</span> Hold hand completely STILL for 0.5s<br />
               <span className="gg-sol-do">✅ Swipe:</span> Quick deliberate movement — blocks static detection

@@ -3,6 +3,8 @@
  * Intelligent Document Organizer Backend + Auth
  */
 
+require('dotenv').config();
+
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -11,7 +13,6 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const axios = require('axios');
-const mongoose = require('mongoose');
 const { protect } = require('../middleware/auth');
 const authRoutes = require('../routes/authRoutes');
 
@@ -46,7 +47,7 @@ const HOST = config.server?.host || 'localhost';
 const app = express();
 
 // Directories
-const uploadsDir = path.join(__dirname, '../uploads');
+const uploadsDir = config.storage?.uploadPath || path.join(__dirname, '../uploads');
 if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
 const documentsDir = config.storage?.documentsPath || path.join(__dirname, '../documents');
 if (!fs.existsSync(documentsDir)) fs.mkdirSync(documentsDir, { recursive: true });
@@ -138,7 +139,7 @@ app.get('/api/health', async (req, res) => {
   res.json({
     success: true,
     status: 'healthy',
-    mongodb: mongoose.connection.readyState === 1,
+    authStorage: 'sqlite',
     endpoints: ['/api/auth/login', '/api/auth/signup', '/api/documents']
   });
 });
@@ -153,11 +154,7 @@ app.use((err, req, res) => res.status(500).json({ success: false, error: err.mes
 async function startServer() {
   try {
     logger.info('🚀 Starting backend...');
-    
-    // Mongo
-    await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/doc_organizer');
-    logger.info('✅ MongoDB connected');
-    
+
     // Existing inits
     if (database?.initialize) await database.initialize();
     if (categorizationService?.initialize) await categorizationService.initialize();

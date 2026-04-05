@@ -3,33 +3,49 @@
  */
 
 const path = require('path');
+const dotenv = require('dotenv');
+
+dotenv.config({ path: path.resolve(__dirname, '../../.env') });
+
+const backendRoot = path.resolve(__dirname, '..', '..');
+const projectRoot = path.resolve(backendRoot, '..');
+
+const resolveFromBackend = (value, fallbackParts) => {
+  if (!value) return path.resolve(...fallbackParts);
+  return path.isAbsolute(value) ? value : path.resolve(backendRoot, value);
+};
+
+const resolveFromProject = (value, fallbackParts) => {
+  if (!value) return path.resolve(...fallbackParts);
+  return path.isAbsolute(value) ? value : path.resolve(projectRoot, value);
+};
 
 const config = {
   // Server settings
   server: {
     port: process.env.PORT || 5000,
-    host: process.env.HOST || 'localhost',
+    host: process.env.HOST || '0.0.0.0',
     env: process.env.NODE_ENV || 'development'
   },
   
   
   // Database
   database: {
-    path: path.join(__dirname, '../../database/documents.db'),
+    path: resolveFromBackend(process.env.DB_PATH, [backendRoot, 'database', 'documents.db']),
   },
   
   // File storage
   storage: {
-    uploadPath: path.join(__dirname, '../uploads/'),
-    documentsPath: path.join(__dirname, '../documents/'),
+    uploadPath: resolveFromBackend(process.env.UPLOAD_DIR, [backendRoot, 'uploads']),
+    documentsPath: resolveFromBackend(process.env.DOCUMENTS_DIR, [backendRoot, 'documents']),
     maxSize: 50 * 1024 * 1024, // 50MB
     allowedTypes: ['pdf', 'docx', 'doc', 'txt', 'pptx', 'xlsx']
   },
   
   // Python AI Engine
   pythonEngine: {
-    scriptPath: path.join(__dirname, '../../../python/document_ai.py'),
-    pythonCommand: process.platform === 'win32' ? 'python' : 'python3',
+    scriptPath: resolveFromProject(process.env.PYTHON_PATH, [projectRoot, 'python', 'document_ai.py']),
+    pythonCommand: process.env.PYTHON_COMMAND || (process.platform === 'win32' ? 'python' : 'python3'),
     timeout: 60000
   },
   

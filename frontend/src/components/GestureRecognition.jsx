@@ -7,18 +7,18 @@ import './GestureRecognition.css';
 const GESTURES = {
   PINCH_IN:     { name: 'Pinch In',       emoji: '🤏', action: 'zoomOut',       description: 'Zoom Out',           priority: 1 },
   PINCH_OUT:    { name: 'Pinch Out',      emoji: '🔍', action: 'zoomIn',        description: 'Zoom In',            priority: 1 },
-  SWIPE_LEFT:   { name: 'Swipe Left',     emoji: '◀️', action: 'prevPage',      description: 'Previous Page',      priority: 2 },
-  SWIPE_RIGHT:  { name: 'Swipe Right',    emoji: '▶️', action: 'nextPage',      description: 'Next Page',          priority: 2 },
-  SWIPE_UP:     { name: '2-Finger Up',    emoji: '⬆️', action: 'scrollUp',      description: 'Scroll Page Up',     priority: 2 },
-  SWIPE_DOWN:   { name: '2-Finger Down',  emoji: '⬇️', action: 'scrollDown',    description: 'Scroll Page Down',   priority: 2 },
+  SWIPE_LEFT:   { name: 'Palm Move Left', emoji: '◀️', action: 'nextPage',      description: 'Next Page',          priority: 2 },
+  SWIPE_RIGHT:  { name: 'Palm Move Right',emoji: '▶️', action: 'prevPage',      description: 'Previous Page',      priority: 2 },
+  SWIPE_UP:     { name: 'Move Hand Up',   emoji: '⬆️', action: 'scrollUp',      description: 'Scroll Up',          priority: 2 },
+  SWIPE_DOWN:   { name: 'Move Hand Down', emoji: '⬇️', action: 'scrollDown',    description: 'Scroll Down',        priority: 2 },
   THUMBS_UP:    { name: 'Thumbs Up',      emoji: '👍', action: 'bookmark',      description: 'Bookmark Document',  priority: 3 },
-  PEACE:        { name: 'Peace Sign',     emoji: '✌️', action: 'summary',       description: 'Generate Summary',   priority: 3 },
+  PEACE:        { name: 'Peace Sign',     emoji: '✌️', action: 'summary',       description: 'Generate AI Summary', priority: 3 },
   FIST:         { name: 'Fist',           emoji: '✊', action: 'close',         description: 'Close Document',     priority: 3 },
-  POINTING:     { name: 'Pointing',       emoji: '👉', action: 'select',        description: 'Select Document',    priority: 3 },
-  OK_SIGN:      { name: 'OK Sign',        emoji: '👌', action: 'confirm',       description: 'Confirm Action',     priority: 3 },
+  POINTING:     { name: 'Pointing',       emoji: '👉', action: 'select',        description: 'Next Document',      priority: 3 },
+  OK_SIGN:      { name: 'OK Sign',        emoji: '👌', action: 'confirm',       description: 'Reset Zoom (100%)',  priority: 3 },
   OPEN_PALM:    { name: 'Open Palm',      emoji: '✋', action: 'showDocuments', description: 'Show Documents',     priority: 4 },
-  ROCK_SIGN:    { name: 'Rock Sign',      emoji: '🤘', action: 'customRock',    description: 'Toggle View Mode',   priority: 4 },
-  THREE:        { name: 'Three Fingers',  emoji: '🖖', action: 'customThree',   description: 'Show Categories',    priority: 4 },
+  ROCK_SIGN:    { name: 'Rock / YoYo',    emoji: '🤘', action: 'customRock',    description: 'Toggle Fullscreen',  priority: 4 },
+  THREE:        { name: 'Three Fingers',  emoji: '🖖', action: 'customThree',   description: 'Open Gesture Guide', priority: 4 },
   FOUR:         { name: 'Four Fingers',   emoji: '🖐️', action: 'customFour',    description: 'Show Analytics',     priority: 4 },
 };
 
@@ -36,9 +36,16 @@ const CONFIG = {
   SAME_GESTURE_COOLDOWN:    1400,
   CONFIDENCE_THRESHOLD:      0.70,
   SWIPE_PIXEL_THRESHOLD:      30,
+  SWIPE_HORIZONTAL_THRESHOLD: 36,
+  SWIPE_VERTICAL_THRESHOLD:   30,
   SWIPE_MAX_TIME:            600,
   SWIPE_MIN_DIRECTION:         1.4,
+  SWIPE_DIRECTION_CONSISTENCY: 0.72,
   SWIPE_VELOCITY_THRESHOLD:   0.18,
+  HORIZONTAL_REBOUND_WINDOW: 1200,
+  HORIZONTAL_REBOUND_THRESHOLD: 80,
+  HORIZONTAL_REBOUND_VELOCITY: 0.26,
+  HORIZONTAL_LOCKOUT_MS:      420,
   PINCH_CLOSE:    0.055,
   PINCH_DELTA:    0.012,
   STABILITY_FRAMES: 3,
@@ -54,6 +61,7 @@ const MOTION_GESTURES = new Set([
 // ✅ CHANGE 2: Scroll gestures fire faster for continuous feel
 // ════════════════════════════════════════════════════════════════
 const SCROLL_GESTURES = new Set(['SWIPE_UP', 'SWIPE_DOWN']);
+const PAGE_SWIPE_GESTURES = new Set(['SWIPE_LEFT', 'SWIPE_RIGHT']);
 
 const CONNECTIONS = [
   [0,1],[1,2],[2,3],[3,4],
@@ -79,6 +87,7 @@ const GestureRecognition = ({ enabled, onGestureDetected, onStatusChange }) => {
   const lastGestureTimeRef = useRef(0);
   const lastGestureNameRef = useRef(null);
   const swipeHistoryRef    = useRef([]);
+  const horizontalSwipeGuardRef = useRef({ lastType: null, lastAt: 0, lockUntil: 0 });
   const lastPinchDistRef   = useRef(null);
   const gestureHistoryRef  = useRef([]);
   const frameCountRef      = useRef(0);
@@ -102,13 +111,18 @@ const GestureRecognition = ({ enabled, onGestureDetected, onStatusChange }) => {
   // ════════════════════════════════════════════════════════════════
   // ✅ CHANGE 3: DEBOUNCED CONFIRM — scroll uses shorter cooldown
   // ════════════════════════════════════════════════════════════════
-  const confirmGesture = useCallback((gestureType, confidence) => {
+  const confirmGesture = useCallback((gestureInput) => {
+    const gestureType = gestureInput?.type;
+    const confidence = gestureInput?.confidence;
+
     if (!gestureType || confidence < CONFIG.CONFIDENCE_THRESHOLD) return;
 
-    // Scroll gestures use shorter cooldown for continuous scrolling feel
+    // Scroll gestures use shorter cooldown for continuous feel.
+    // Page swipes are kept responsive but guarded by stronger swipe detection logic.
     const isScroll  = SCROLL_GESTURES.has(gestureType);
-    const gCooldown = isScroll ? 320 : CONFIG.GESTURE_COOLDOWN;
-    const sCooldown = isScroll ? 320 : CONFIG.SAME_GESTURE_COOLDOWN;
+    const isPageSwipe = PAGE_SWIPE_GESTURES.has(gestureType);
+    const gCooldown = isScroll ? 320 : isPageSwipe ? 520 : CONFIG.GESTURE_COOLDOWN;
+    const sCooldown = isScroll ? 320 : isPageSwipe ? 780 : CONFIG.SAME_GESTURE_COOLDOWN;
 
     const now     = Date.now();
     const elapsed = now - lastGestureTimeRef.current;
@@ -126,6 +140,7 @@ const GestureRecognition = ({ enabled, onGestureDetected, onStatusChange }) => {
       gesture:   gestureType.toLowerCase(),
       action:    info.action,
       confidence,
+      pointer:   gestureInput?.pointer || null,
       display:   info,
       timestamp: new Date().toISOString(),
     };
@@ -186,60 +201,133 @@ const GestureRecognition = ({ enabled, onGestureDetected, onStatusChange }) => {
   // SWIPE DETECTION (mirror-corrected)
   // ════════════════════════════════════════════════════════════════
   const detectSwipe = useCallback((lm, fingerCount) => {
-    if (fingerCount < 2) { swipeHistoryRef.current = []; return null; }
+    if (fingerCount < 2) {
+      swipeHistoryRef.current = [];
+      return null;
+    }
 
-    const rawX = (lm[LANDMARKS.INDEX.TIP].x + lm[LANDMARKS.MIDDLE.TIP].x) / 2;
-    const y    = (lm[LANDMARKS.INDEX.TIP].y + lm[LANDMARKS.MIDDLE.TIP].y) / 2;
-    const now  = Date.now();
+    // Track palm center instead of fingertips so quick finger wiggles don't look like swipes.
+    const rawX = (
+      lm[LANDMARKS.WRIST].x +
+      lm[LANDMARKS.INDEX.MCP].x +
+      lm[LANDMARKS.PINKY.MCP].x
+    ) / 3;
+    const y = (
+      lm[LANDMARKS.WRIST].y +
+      lm[LANDMARKS.INDEX.MCP].y +
+      lm[LANDMARKS.PINKY.MCP].y
+    ) / 3;
+    const now = Date.now();
 
     swipeHistoryRef.current.push({ x: rawX, y, t: now });
     swipeHistoryRef.current = swipeHistoryRef.current.filter(
-      p => now - p.t < CONFIG.SWIPE_MAX_TIME
+      (p) => now - p.t < CONFIG.SWIPE_MAX_TIME
     );
 
     const history = swipeHistoryRef.current;
-    if (history.length < 4) return null;
+    if (history.length < 5) return null;
 
     const oldest = history[0];
     const newest = history[history.length - 1];
-    const dt     = newest.t - oldest.t;
-    if (dt < 80) return null;
+    const dt = newest.t - oldest.t;
+    if (dt < 100) return null;
 
-    // Negate dx to compensate for CSS scaleX(-1) mirror
+    // Negate dx to compensate for CSS scaleX(-1) mirror.
     const dx = -(newest.x - oldest.x) * 640;
-    const dy =  (newest.y - oldest.y) * 480;
+    const dy = (newest.y - oldest.y) * 480;
     const vx = Math.abs(dx) / dt;
     const vy = Math.abs(dy) / dt;
 
-    setDebugInfo(prev => ({
+    const xSteps = [];
+    const ySteps = [];
+    for (let i = 1; i < history.length; i += 1) {
+      xSteps.push(-(history[i].x - history[i - 1].x) * 640);
+      ySteps.push((history[i].y - history[i - 1].y) * 480);
+    }
+
+    const dxSign = Math.sign(dx) || 1;
+    const dySign = Math.sign(dy) || 1;
+    const xConsistency = xSteps.length
+      ? xSteps.filter((s) => Math.abs(s) < 1.5 || Math.sign(s) === dxSign).length / xSteps.length
+      : 0;
+    const yConsistency = ySteps.length
+      ? ySteps.filter((s) => Math.abs(s) < 1.5 || Math.sign(s) === dySign).length / ySteps.length
+      : 0;
+
+    setDebugInfo((prev) => ({
       ...prev,
       swipeVelocity: Math.max(vx, vy).toFixed(3),
-      swipeDir: dx > 10 ? '→' : dx < -10 ? '←' : dy > 10 ? '↓' : dy < -10 ? '↑' : '·',
+      swipeDir: dx > 12 ? '→' : dx < -12 ? '←' : dy > 12 ? '↓' : dy < -12 ? '↑' : '·',
     }));
 
-    // Horizontal swipe
+    // Requested behavior:
+    // - left movement -> next page only with open palm
+    // - right movement -> previous page with open or closed palm
+    const isPalmOpen = fingerCount >= 4;
+    const isPalmClosed = fingerCount <= 1;
+    const horizontalGuard = horizontalSwipeGuardRef.current;
+    const inHorizontalLockout = now < horizontalGuard.lockUntil;
+
     if (
+      !inHorizontalLockout &&
       vx > CONFIG.SWIPE_VELOCITY_THRESHOLD &&
       vx > vy * CONFIG.SWIPE_MIN_DIRECTION &&
-      Math.abs(dx) > CONFIG.SWIPE_PIXEL_THRESHOLD
+      Math.abs(dx) > CONFIG.SWIPE_HORIZONTAL_THRESHOLD &&
+      xConsistency >= CONFIG.SWIPE_DIRECTION_CONSISTENCY
     ) {
-      swipeHistoryRef.current = [];
-      const conf = Math.min(0.95, 0.72 + vx * 0.6);
       const type = dx > 0 ? 'SWIPE_RIGHT' : 'SWIPE_LEFT';
-      console.log(`👆 Swipe: ${type} | dx=${dx.toFixed(1)}px | vx=${vx.toFixed(3)}px/ms`);
+
+      if (type === 'SWIPE_LEFT' && !isPalmOpen) {
+        return null;
+      }
+
+      if (type === 'SWIPE_RIGHT' && !(isPalmOpen || isPalmClosed)) {
+        return null;
+      }
+
+      const oppositeWithinWindow =
+        horizontalGuard.lastType &&
+        horizontalGuard.lastType !== type &&
+        now - horizontalGuard.lastAt < CONFIG.HORIZONTAL_REBOUND_WINDOW;
+
+      if (oppositeWithinWindow) {
+        const reboundConsistency = Math.min(0.9, CONFIG.SWIPE_DIRECTION_CONSISTENCY + 0.12);
+        const reboundIsStrong =
+          Math.abs(dx) > CONFIG.HORIZONTAL_REBOUND_THRESHOLD &&
+          vx > CONFIG.HORIZONTAL_REBOUND_VELOCITY &&
+          xConsistency >= reboundConsistency;
+
+        if (!reboundIsStrong) {
+          return null;
+        }
+      }
+
+      horizontalSwipeGuardRef.current = {
+        lastType: type,
+        lastAt: now,
+        lockUntil: now + CONFIG.HORIZONTAL_LOCKOUT_MS,
+      };
+
+      swipeHistoryRef.current = history.slice(-1);
+      const conf = Math.min(0.95, 0.72 + vx * 0.6);
+      console.log(
+        `👆 Swipe: ${type} | dx=${dx.toFixed(1)}px | vx=${vx.toFixed(3)}px/ms | consistency=${xConsistency.toFixed(2)}`
+      );
       return { type, confidence: conf };
     }
 
-    // Vertical swipe
     if (
       vy > CONFIG.SWIPE_VELOCITY_THRESHOLD &&
       vy > vx * CONFIG.SWIPE_MIN_DIRECTION &&
-      Math.abs(dy) > CONFIG.SWIPE_PIXEL_THRESHOLD
+      Math.abs(dy) > CONFIG.SWIPE_VERTICAL_THRESHOLD &&
+      yConsistency >= CONFIG.SWIPE_DIRECTION_CONSISTENCY
     ) {
-      swipeHistoryRef.current = [];
+      swipeHistoryRef.current = history.slice(-1);
       const conf = Math.min(0.95, 0.72 + vy * 0.6);
       const type = dy > 0 ? 'SWIPE_DOWN' : 'SWIPE_UP';
-      console.log(`👆 Swipe: ${type} | dy=${dy.toFixed(1)}px | vy=${vy.toFixed(3)}px/ms`);
+      console.log(
+        `👆 Swipe: ${type} | dy=${dy.toFixed(1)}px | vy=${vy.toFixed(3)}px/ms | consistency=${yConsistency.toFixed(2)}`
+      );
       return { type, confidence: conf };
     }
 
@@ -268,14 +356,16 @@ const GestureRecognition = ({ enabled, onGestureDetected, onStatusChange }) => {
 
     if (index && total === 1) return { type: 'POINTING', confidence: 0.88 };
 
-    if (index && middle && !ring && !pinky && total === 2)
+    // Peace sign: allow thumb to be either open or closed.
+    if (index && middle && !ring && !pinky)
       return { type: 'PEACE', confidence: 0.90 };
 
     const thumbIndexDist = Math.hypot(
       lm[LANDMARKS.THUMB.TIP].x - lm[LANDMARKS.INDEX.TIP].x,
       lm[LANDMARKS.THUMB.TIP].y - lm[LANDMARKS.INDEX.TIP].y,
     );
-    if (thumbIndexDist < 0.06 && middle && ring)
+    // OK sign: accept a slightly larger thumb-index circle and allow either middle or ring finger extended.
+    if (thumbIndexDist < 0.085 && (middle || ring))
       return { type: 'OK_SIGN', confidence: 0.85 };
 
     if (index && pinky && !middle && !ring) return { type: 'ROCK_SIGN', confidence: 0.82 };
@@ -292,16 +382,21 @@ const GestureRecognition = ({ enabled, onGestureDetected, onStatusChange }) => {
   const detectGesture = useCallback((lm) => {
     const fingers     = getFingerStates(lm);
     const fingerCount = fingers.reduce((a, b) => a + b, 0);
+    // Camera feed is mirrored in UI, so invert x to match user-perceived pointer position.
+    const pointer = {
+      x: 1 - Math.min(Math.max(lm[LANDMARKS.INDEX.TIP].x, 0), 1),
+      y: Math.min(Math.max(lm[LANDMARKS.INDEX.TIP].y, 0), 1),
+    };
     setDebugInfo(prev => ({ ...prev, fingerStates: fingers }));
 
     const pinch = detectPinch(lm);
-    if (pinch?.confidence >= CONFIG.CONFIDENCE_THRESHOLD) return pinch;
+    if (pinch?.confidence >= CONFIG.CONFIDENCE_THRESHOLD) return { ...pinch, pointer };
 
     const swipe = detectSwipe(lm, fingerCount);
-    if (swipe?.confidence >= CONFIG.CONFIDENCE_THRESHOLD) return swipe;
+    if (swipe?.confidence >= CONFIG.CONFIDENCE_THRESHOLD) return { ...swipe, pointer };
 
     const staticG = classifyStatic(lm, fingers);
-    if (staticG?.confidence >= CONFIG.CONFIDENCE_THRESHOLD) return staticG;
+    if (staticG?.confidence >= CONFIG.CONFIDENCE_THRESHOLD) return { ...staticG, pointer };
 
     return null;
   }, [getFingerStates, detectPinch, detectSwipe, classifyStatic]);
@@ -405,6 +500,7 @@ const GestureRecognition = ({ enabled, onGestureDetected, onStatusChange }) => {
 
     if (!hasHand) {
       swipeHistoryRef.current   = [];
+      horizontalSwipeGuardRef.current = { lastType: null, lastAt: 0, lockUntil: 0 };
       lastPinchDistRef.current  = null;
       gestureHistoryRef.current = [];
       return;
@@ -423,7 +519,7 @@ const GestureRecognition = ({ enabled, onGestureDetected, onStatusChange }) => {
       }));
 
       if (MOTION_GESTURES.has(gesture.type)) {
-        confirmGestureRef.current(gesture.type, gesture.confidence);
+        confirmGestureRef.current(gesture);
         gestureHistoryRef.current = [];
       } else {
         gestureHistoryRef.current.push(gesture.type);
@@ -436,7 +532,7 @@ const GestureRecognition = ({ enabled, onGestureDetected, onStatusChange }) => {
           recent.every(g => g === gesture.type);
 
         if (isStable) {
-          confirmGestureRef.current(gesture.type, gesture.confidence);
+          confirmGestureRef.current(gesture);
           gestureHistoryRef.current = [];
         }
       }

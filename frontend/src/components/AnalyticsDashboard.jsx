@@ -3,17 +3,27 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   PieChart, Pie, Cell, LineChart, Line, ResponsiveContainer, Area, AreaChart
 } from 'recharts';
+import API from '../services/api';
 import './AnalyticsDashboard.css';
 
-const API_URL = 'http://localhost:5000/api/analytics';
-
-const COLORS = ['#8b5cf6', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#6366f1', '#14b8a6'];
+const COLORS = ['#0e7a88', '#1f6f8c', '#2b8662', '#b98b35', '#b4473d', '#9f7454', '#476f91', '#5f8fa7'];
 
 const PRIORITY_COLORS = {
-  high: '#ef4444',
-  medium: '#f59e0b',
-  low: '#10b981'
+  high: '#b4473d',
+  medium: '#b98b35',
+  low: '#2b8662'
 };
+
+const CHART_GRID = 'rgba(148, 163, 184, 0.24)';
+const CHART_AXIS = '#b6cbe0';
+const CHART_TOOLTIP_STYLE = {
+  backgroundColor: 'rgba(15, 23, 42, 0.96)',
+  border: '1px solid rgba(148, 163, 184, 0.45)',
+  borderRadius: '10px',
+  color: '#e8f3ff',
+  boxShadow: '0 10px 25px rgba(2, 6, 23, 0.4)'
+};
+const CHART_TOOLTIP_LABEL_STYLE = { color: '#eaf4ff', fontWeight: 700 };
 
 function AnalyticsDashboard() {
   const [stats, setStats] = useState(null);
@@ -34,25 +44,25 @@ function AnalyticsDashboard() {
     setLoading(true);
     try {
       const endpoints = [
-        { url: `${API_URL}/stats`, setter: (d) => setStats(d.data) },
-        { url: `${API_URL}/categories`, setter: (d) => setCategoryData(d.data) },
-        { url: `${API_URL}/upload-trends?days=${trendDays}`, setter: (d) => setUploadTrends(d.data) },
-        { url: `${API_URL}/activity-trends?days=${trendDays}`, setter: (d) => setActivityTrends(d.data) },
-        { url: `${API_URL}/file-types`, setter: (d) => setFileTypes(d.data) },
-        { url: `${API_URL}/most-accessed?limit=10`, setter: (d) => setMostAccessed(d.data) },
-        { url: `${API_URL}/least-accessed?limit=10`, setter: (d) => setLeastAccessed(d.data) },
-        { url: `${API_URL}/suggestions`, setter: (d) => setSuggestions(d.data) },
-        { url: `${API_URL}/top-keywords?limit=15`, setter: (d) => setTopKeywords(d.data) },
-        { url: `${API_URL}/weekly-summary?weeks=8`, setter: (d) => setWeeklySummary(d.data) },
+        { url: '/analytics/stats', setter: (d) => setStats(d.data) },
+        { url: '/analytics/categories', setter: (d) => setCategoryData(d.data) },
+        { url: `/analytics/upload-trends?days=${trendDays}`, setter: (d) => setUploadTrends(d.data) },
+        { url: `/analytics/activity-trends?days=${trendDays}`, setter: (d) => setActivityTrends(d.data) },
+        { url: '/analytics/file-types', setter: (d) => setFileTypes(d.data) },
+        { url: '/analytics/most-accessed?limit=10', setter: (d) => setMostAccessed(d.data) },
+        { url: '/analytics/least-accessed?limit=10', setter: (d) => setLeastAccessed(d.data) },
+        { url: '/analytics/suggestions', setter: (d) => setSuggestions(d.data) },
+        { url: '/analytics/top-keywords?limit=15', setter: (d) => setTopKeywords(d.data) },
+        { url: '/analytics/weekly-summary?weeks=8', setter: (d) => setWeeklySummary(d.data) },
       ];
 
       const results = await Promise.allSettled(
-        endpoints.map(ep => fetch(ep.url).then(r => r.json()))
+        endpoints.map((ep) => API.get(ep.url))
       );
 
       results.forEach((result, index) => {
-        if (result.status === 'fulfilled' && result.value.success) {
-          endpoints[index].setter(result.value);
+        if (result.status === 'fulfilled' && result.value?.data?.success) {
+          endpoints[index].setter(result.value.data);
         }
       });
     } catch (error) {
@@ -211,14 +221,14 @@ function AnalyticsDashboard() {
               {fileTypes.length > 0 ? (
                 <ResponsiveContainer width="100%" height={300}>
                   <BarChart data={fileTypes}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                    <XAxis dataKey="type" stroke="#9ca3af" />
-                    <YAxis stroke="#9ca3af" />
+                    <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID} />
+                    <XAxis dataKey="type" stroke={CHART_AXIS} />
+                    <YAxis stroke={CHART_AXIS} />
                     <Tooltip
-                      contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '8px' }}
-                      labelStyle={{ color: '#f3f4f6' }}
+                      contentStyle={CHART_TOOLTIP_STYLE}
+                      labelStyle={CHART_TOOLTIP_LABEL_STYLE}
                     />
-                    <Bar dataKey="count" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="count" fill={COLORS[0]} radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               ) : (
@@ -233,17 +243,17 @@ function AnalyticsDashboard() {
             {weeklySummary.length > 0 ? (
               <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={weeklySummary}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                  <XAxis dataKey="weekLabel" stroke="#9ca3af" tick={{ fontSize: 12 }} />
-                  <YAxis stroke="#9ca3af" />
+                  <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID} />
+                  <XAxis dataKey="weekLabel" stroke={CHART_AXIS} tick={{ fontSize: 12 }} />
+                  <YAxis stroke={CHART_AXIS} />
                   <Tooltip
-                    contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '8px' }}
-                    labelStyle={{ color: '#f3f4f6' }}
+                    contentStyle={CHART_TOOLTIP_STYLE}
+                    labelStyle={CHART_TOOLTIP_LABEL_STYLE}
                   />
                   <Legend />
-                  <Bar dataKey="uploads" fill="#8b5cf6" name="Uploads" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="views" fill="#3b82f6" name="Views" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="readingTimeMinutes" fill="#10b981" name="Reading (min)" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="uploads" fill={COLORS[0]} name="Uploads" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="views" fill={COLORS[1]} name="Views" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="readingTimeMinutes" fill={COLORS[2]} name="Reading (min)" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             ) : (
@@ -278,26 +288,26 @@ function AnalyticsDashboard() {
                 <AreaChart data={uploadTrends}>
                   <defs>
                     <linearGradient id="uploadGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0} />
+                      <stop offset="5%" stopColor={COLORS[0]} stopOpacity={0.28} />
+                      <stop offset="95%" stopColor={COLORS[0]} stopOpacity={0} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                  <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID} />
                   <XAxis
                     dataKey="date"
-                    stroke="#9ca3af"
+                    stroke={CHART_AXIS}
                     tick={{ fontSize: 10 }}
                     tickFormatter={(val) => {
                       const d = new Date(val);
                       return `${d.getMonth() + 1}/${d.getDate()}`;
                     }}
                   />
-                  <YAxis stroke="#9ca3af" allowDecimals={false} />
+                  <YAxis stroke={CHART_AXIS} allowDecimals={false} />
                   <Tooltip
-                    contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '8px' }}
-                    labelStyle={{ color: '#f3f4f6' }}
+                    contentStyle={CHART_TOOLTIP_STYLE}
+                    labelStyle={CHART_TOOLTIP_LABEL_STYLE}
                   />
-                  <Area type="monotone" dataKey="count" stroke="#8b5cf6" fill="url(#uploadGradient)" name="Uploads" />
+                  <Area type="monotone" dataKey="count" stroke={COLORS[0]} fill="url(#uploadGradient)" name="Uploads" />
                 </AreaChart>
               </ResponsiveContainer>
             ) : (
@@ -311,25 +321,25 @@ function AnalyticsDashboard() {
             {activityTrends.length > 0 ? (
               <ResponsiveContainer width="100%" height={300}>
                 <LineChart data={activityTrends}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                  <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID} />
                   <XAxis
                     dataKey="date"
-                    stroke="#9ca3af"
+                    stroke={CHART_AXIS}
                     tick={{ fontSize: 10 }}
                     tickFormatter={(val) => {
                       const d = new Date(val);
                       return `${d.getMonth() + 1}/${d.getDate()}`;
                     }}
                   />
-                  <YAxis stroke="#9ca3af" yAxisId="left" />
-                  <YAxis stroke="#9ca3af" yAxisId="right" orientation="right" />
+                  <YAxis stroke={CHART_AXIS} yAxisId="left" />
+                  <YAxis stroke={CHART_AXIS} yAxisId="right" orientation="right" />
                   <Tooltip
-                    contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '8px' }}
-                    labelStyle={{ color: '#f3f4f6' }}
+                    contentStyle={CHART_TOOLTIP_STYLE}
+                    labelStyle={CHART_TOOLTIP_LABEL_STYLE}
                   />
                   <Legend />
-                  <Line yAxisId="left" type="monotone" dataKey="views" stroke="#3b82f6" name="Views" dot={false} strokeWidth={2} />
-                  <Line yAxisId="right" type="monotone" dataKey="readingMinutes" stroke="#10b981" name="Reading (min)" dot={false} strokeWidth={2} />
+                  <Line yAxisId="left" type="monotone" dataKey="views" stroke={COLORS[1]} name="Views" dot={false} strokeWidth={2} />
+                  <Line yAxisId="right" type="monotone" dataKey="readingMinutes" stroke={COLORS[2]} name="Reading (min)" dot={false} strokeWidth={2} />
                 </LineChart>
               </ResponsiveContainer>
             ) : (
@@ -343,16 +353,16 @@ function AnalyticsDashboard() {
             {categoryData.length > 0 ? (
               <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={categoryData} layout="vertical">
-                  <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                  <XAxis type="number" stroke="#9ca3af" />
-                  <YAxis type="category" dataKey="name" stroke="#9ca3af" width={120} tick={{ fontSize: 12 }} />
+                  <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID} />
+                  <XAxis type="number" stroke={CHART_AXIS} />
+                  <YAxis type="category" dataKey="name" stroke={CHART_AXIS} width={120} tick={{ fontSize: 12 }} />
                   <Tooltip
-                    contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '8px' }}
-                    labelStyle={{ color: '#f3f4f6' }}
+                    contentStyle={CHART_TOOLTIP_STYLE}
+                    labelStyle={CHART_TOOLTIP_LABEL_STYLE}
                   />
                   <Legend />
-                  <Bar dataKey="count" fill="#8b5cf6" name="Documents" radius={[0, 4, 4, 0]} />
-                  <Bar dataKey="totalViews" fill="#3b82f6" name="Views" radius={[0, 4, 4, 0]} />
+                  <Bar dataKey="count" fill={COLORS[0]} name="Documents" radius={[0, 4, 4, 0]} />
+                  <Bar dataKey="totalViews" fill={COLORS[1]} name="Views" radius={[0, 4, 4, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             ) : (

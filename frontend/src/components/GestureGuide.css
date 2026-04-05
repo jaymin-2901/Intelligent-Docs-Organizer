@@ -3,9 +3,34 @@
    ═══════════════════════════════════════════════════════════════ */
 
 .gesture-guide {
+  --gg-bg: rgba(15, 23, 42, 0.68);
+  --gg-bg-strong: rgba(15, 23, 42, 0.84);
+  --gg-surface: rgba(30, 41, 59, 0.82);
+  --gg-surface-hover: rgba(39, 53, 72, 0.92);
+  --gg-border: rgba(148, 163, 184, 0.34);
+  --gg-text-primary: #f8fafc;
+  --gg-text-secondary: #e2e8f0;
+  --gg-text-muted: #c0ccdd;
+
+  --primary: var(--gg-bg-strong);
+  --secondary: var(--gg-bg);
+  --surface: var(--gg-surface);
+  --surface-hover: var(--gg-surface-hover);
+  --border: var(--gg-border);
+  --text-primary: var(--gg-text-primary);
+  --text-secondary: var(--gg-text-secondary);
+  --text-muted: var(--gg-text-muted);
+  --accent: #7dd3fc;
+  --warning: #fbbf24;
+
   padding: 1.5rem;
   max-width: 1100px;
   margin: 0 auto;
+  background: var(--gg-bg-strong);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--gg-border);
+  border-radius: 14px;
+  box-shadow: 0 16px 36px rgba(2, 6, 23, 0.45);
   animation: gg-appear 0.4s ease-out;
   overflow-y: auto;
   max-height: calc(100vh - 160px);
@@ -66,14 +91,14 @@
 
 .gg-header-text h2 {
   margin: 0;
-  font-size: 1.3rem;
+  font-size: 1.42rem;
   color: var(--text-primary);
   font-weight: 700;
 }
 
 .gg-header-text p {
   margin: 0.25rem 0 0;
-  font-size: 0.85rem;
+  font-size: 0.96rem;
   color: var(--text-muted);
 }
 
@@ -87,7 +112,7 @@
   border: 1px solid var(--border);
   border-radius: 10px;
   color: var(--text-secondary);
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.25s ease;
@@ -152,7 +177,7 @@
   justify-content: space-between;
   align-items: center;
   margin-top: 0.5rem;
-  font-size: 0.8rem;
+  font-size: 0.88rem;
   color: var(--text-secondary);
 }
 
@@ -186,7 +211,7 @@
   background: var(--secondary);
   border: 1px solid var(--border);
   border-radius: 10px;
-  font-size: 0.78rem;
+  font-size: 0.86rem;
   color: var(--text-secondary);
   display: flex;
   align-items: center;
@@ -217,7 +242,7 @@
   border: 1px solid var(--border);
   border-radius: 20px;
   color: var(--text-secondary);
-  font-size: 0.78rem;
+  font-size: 0.84rem;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;
@@ -285,14 +310,14 @@
 
 .gg-group-text p {
   margin: 0.15rem 0 0;
-  font-size: 0.78rem;
+  font-size: 0.86rem;
   color: var(--text-muted);
 }
 
 .gg-type-badge {
   padding: 0.3rem 0.7rem;
   border-radius: 20px;
-  font-size: 0.72rem;
+  font-size: 0.78rem;
   font-weight: 600;
   white-space: nowrap;
 }
@@ -408,13 +433,13 @@
 
 .gg-card-meta h4 {
   margin: 0;
-  font-size: 0.9rem;
+  font-size: 1rem;
   color: var(--text-primary);
   font-weight: 700;
 }
 
 .gg-card-action {
-  font-size: 0.78rem;
+  font-size: 0.86rem;
   color: var(--gc);
   font-weight: 600;
 }
@@ -425,7 +450,7 @@
   padding: 0.5rem 0.65rem;
   background: var(--surface);
   border-radius: 8px;
-  font-size: 0.75rem;
+  font-size: 0.84rem;
   color: var(--text-secondary);
   line-height: 1.4;
 }
@@ -590,7 +615,7 @@
 }
 
 .hd-special {
-  font-size: 0.6rem;
+  font-size: 0.72rem;
   color: var(--text-muted);
   font-style: italic;
   margin-top: 2px;
@@ -646,13 +671,13 @@
 
 .gg-conflict p {
   margin: 0 0 0.5rem;
-  font-size: 0.8rem;
+  font-size: 0.9rem;
   color: var(--text-secondary);
   line-height: 1.5;
 }
 
 .gg-conflict-solution {
-  font-size: 0.78rem;
+  font-size: 0.86rem;
   color: var(--text-secondary);
   line-height: 1.6;
   padding: 0.5rem 0.65rem;
@@ -689,7 +714,7 @@
   background: var(--secondary);
   border: 1px solid var(--border);
   border-radius: 8px;
-  font-size: 0.82rem;
+  font-size: 0.9rem;
   color: var(--text-secondary);
 }
 
@@ -699,7 +724,7 @@
   border: 1px solid var(--border);
   border-radius: 5px;
   font-family: 'SF Mono', 'Consolas', monospace;
-  font-size: 0.75rem;
+  font-size: 0.82rem;
   font-weight: 600;
   color: var(--accent);
   box-shadow: 0 1px 2px rgba(0,0,0,0.2);
@@ -759,14 +784,14 @@
 
 .gg-accuracy-card h4 {
   margin: 0 0 0.35rem;
-  font-size: 0.85rem;
+  font-size: 0.92rem;
   color: var(--text-primary);
   font-weight: 700;
 }
 
 .gg-accuracy-card p {
   margin: 0;
-  font-size: 0.76rem;
+  font-size: 0.85rem;
   color: var(--text-secondary);
   line-height: 1.5;
 }
@@ -785,13 +810,4 @@
   font-size: 0.65rem;
   font-family: monospace;
   color: #38BDF8;
-}
-
-.gesture-guide {
-    background: #1f1f3a;
-    backdrop-filter: blur(10px);
-    border-radius: 8px;
-    padding: 12px;
-    border: 1px solid #1f1f3a;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }

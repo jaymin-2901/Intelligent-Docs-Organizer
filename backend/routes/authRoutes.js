@@ -25,12 +25,12 @@ const loginRules = [
 ];
 
 // ── Routes ────────────────────────────────────────────
-router.post('/auth/signup',           signupRules, ctrl.signup);
-router.post('/auth/login',            loginRules,  ctrl.login);
-router.get ('/auth/me',               protect,     ctrl.getMe);
-router.put ('/auth/profile',          protect,     ctrl.updateProfile);
-router.put ('/auth/change-password',  protect,     ctrl.changePassword);
-router.post('/auth/forgot-password',               ctrl.forgotPassword);
-router.post('/auth/reset-password/:token',         ctrl.resetPassword);
+router.post('/signup',           signupRules, ctrl.signup);
+router.post('/login',            loginRules,  ctrl.login);
+router.get ('/me',               protect,     ctrl.getMe);
+router.put ('/profile',          protect,     ctrl.updateProfile);
+router.put ('/change-password',  protect,     ctrl.changePassword);
+router.post('/forgot-password',               ctrl.forgotPassword);
+router.post('/reset-password/:token',         ctrl.resetPassword);
 
 module.exports = router;
