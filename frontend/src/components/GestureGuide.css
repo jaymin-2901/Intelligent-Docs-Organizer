@@ -811,3 +811,34 @@
   font-family: monospace;
   color: #38BDF8;
 }
+
+/* Keep guide readable even if legacy gesture overlay CSS gets loaded later. */
+.gesture-guide {
+  background: var(--gg-bg-strong) !important;
+  border-color: var(--gg-border) !important;
+  color: var(--gg-text-primary) !important;
+}
+
+.gesture-guide .gg-header-text h2,
+.gesture-guide .gg-group-text h3,
+.gesture-guide .gg-card-meta h4,
+.gesture-guide .gg-conflicts-section h3,
+.gesture-guide .gg-keyboard-section h3,
+.gesture-guide .gg-accuracy-section h3,
+.gesture-guide .gg-accuracy-card h4,
+.gesture-guide .gg-tip strong,
+.gesture-guide .gg-key kbd {
+  color: var(--gg-text-primary) !important;
+}
+
+.gesture-guide .gg-header-text p,
+.gesture-guide .gg-progress-info,
+.gesture-guide .gg-tip,
+.gesture-guide .gg-group-text p,
+.gesture-guide .gg-card-tip,
+.gesture-guide .gg-conflict p,
+.gesture-guide .gg-conflict-solution,
+.gesture-guide .gg-key,
+.gesture-guide .gg-accuracy-card p {
+  color: var(--gg-text-secondary) !important;
+}

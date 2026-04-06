@@ -771,7 +771,7 @@ function DashboardContent() {
       case 'fullScreen':
       case 'toggleFullscreen':
       case 'yoyo':
-        window.dispatchEvent(new Event('dv-fullscreen-enter'));
+        window.dispatchEvent(new Event('dv-fullscreen-toggle'));
         break;
       case 'customThree':
         navigate('/dashboard/gesture-guide');
