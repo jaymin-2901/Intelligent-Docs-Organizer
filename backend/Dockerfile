@@ -7,7 +7,8 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/*
 
 COPY backend/package*.json ./backend/
-RUN npm ci --omit=dev --prefix ./backend
+RUN npm ci --omit=dev --prefix ./backend \
+  && npm rebuild sqlite3 --build-from-source --prefix ./backend
 
 COPY backend ./backend
 COPY python ./python
