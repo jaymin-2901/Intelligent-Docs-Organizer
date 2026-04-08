@@ -16,7 +16,7 @@ const strengthColors = ['#d62828', '#f59e0b', '#f59e0b', '#7cc242', '#1f7fae'];
 const strengthLabels = ['Very Weak', 'Weak', 'Fair', 'Strong', 'Excellent'];
 
 export default function Signup() {
-  const { signup, user } = useAuth();
+  const { signup, login, user } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -69,6 +69,24 @@ export default function Signup() {
       navigate('/dashboard/doc-view', { replace: true });
     } catch (err) {
       const msg = err.response?.data?.message || 'Signup failed.';
+
+      // Existing account: let user continue without forcing a manual login flow.
+      if (err.response?.status === 409) {
+        try {
+          const data = await login(form.email, form.password, false);
+          toast.success(data.message || 'Welcome back!');
+          navigate('/dashboard/doc-view', { replace: true });
+          return;
+        } catch (_) {
+          toast.error('Account already exists. Please sign in.');
+          navigate('/login', {
+            replace: true,
+            state: { prefillEmail: form.email.trim() },
+          });
+          return;
+        }
+      }
+
       toast.error(msg);
       setErrors({ general: msg });
     } finally {

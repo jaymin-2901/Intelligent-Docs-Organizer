@@ -9,6 +9,7 @@ export default function Login() {
   const navigate         = useNavigate();
   const location         = useLocation();
   const from             = location.state?.from?.pathname || '/dashboard/doc-view';
+  const prefillEmail     = (location.state?.prefillEmail || '').trim();
 
   useEffect(() => {
     if (user) {
@@ -18,7 +19,7 @@ export default function Login() {
 
   if (user) return null;
 
-  const [form, setForm]         = useState({ email: '', password: '', rememberMe: false });
+  const [form, setForm]         = useState({ email: prefillEmail, password: '', rememberMe: false });
   const [errors, setErrors]     = useState({});
   const [loading, setLoading]   = useState(false);
   const [showPwd, setShowPwd]   = useState(false);
