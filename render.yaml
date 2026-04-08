@@ -1,16 +1,12 @@
 services:
   - type: web
     name: intelligent-doc-organizer-api
-    env: docker
+    runtime: docker
     plan: free
-    autoDeploy: true
+    autoDeployTrigger: commit
     dockerfilePath: ./backend/Dockerfile
     dockerContext: .
     healthCheckPath: /api/health
-    disks:
-      - name: backend-data
-        mountPath: /var/data
-        sizeGB: 1
     envVars:
       - key: NODE_ENV
         value: production
@@ -25,11 +21,11 @@ services:
       - key: CLIENT_URL
         sync: false
       - key: DB_PATH
-        value: /var/data/database/documents.db
+        value: /tmp/ido/database/documents.db
       - key: UPLOAD_DIR
-        value: /var/data/uploads
+        value: /tmp/ido/uploads
       - key: DOCUMENTS_DIR
-        value: /var/data/documents
+        value: /tmp/ido/documents
       - key: PYTHON_PATH
         value: /app/python/document_ai.py
       - key: PYTHON_COMMAND
