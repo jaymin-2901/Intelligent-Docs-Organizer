@@ -9,6 +9,7 @@ const path = require('path');
 const fs = require('fs');
 const sqlite3 = require('sqlite3').verbose();
 const multer = require('multer');
+const config = require('../config/config');
 
 // Logger
 const logger = {
@@ -17,31 +18,55 @@ const logger = {
   warn: (msg) => console.warn(`[WARN] ${msg}`)
 };
 
-// Possible database paths
-const DB_PATHS = [
+const backendRoot = path.resolve(__dirname, '..', '..');
+const projectRoot = path.resolve(backendRoot, '..');
+
+const configuredDbPath = config?.database?.path || null;
+const envDbPath = process.env.DB_PATH
+  ? (path.isAbsolute(process.env.DB_PATH)
+      ? process.env.DB_PATH
+      : path.resolve(backendRoot, process.env.DB_PATH))
+  : null;
+
+const LEGACY_DB_PATHS = Array.from(new Set([
   path.join(__dirname, '../../database/documents.db'),
   path.join(__dirname, '../../../storage/database/documents.db'),
   path.join(__dirname, '../database/documents.db'),
   path.join(__dirname, '../models/database.db')
-];
+].filter(Boolean)));
 
-// STEP 1 FIX: Align upload directories with server.js static serving
-const UPLOAD_PATHS = [
-  path.join(__dirname, '../documents'), // This matches server.js DOCUMENTS_DIR
-  path.join(__dirname, '../uploads'),   // This matches server.js UPLOADS_DIR
+const configuredDocumentsDir = config?.storage?.documentsPath || null;
+const configuredUploadDir = config?.storage?.uploadPath || null;
+
+// Align upload writes with configured static directories in every environment.
+const UPLOAD_PATHS = Array.from(new Set([
+  configuredDocumentsDir,
+  configuredUploadDir,
+  process.env.DOCUMENTS_DIR
+    ? (path.isAbsolute(process.env.DOCUMENTS_DIR)
+        ? process.env.DOCUMENTS_DIR
+        : path.resolve(backendRoot, process.env.DOCUMENTS_DIR))
+    : null,
+  process.env.UPLOAD_DIR
+    ? (path.isAbsolute(process.env.UPLOAD_DIR)
+        ? process.env.UPLOAD_DIR
+        : path.resolve(backendRoot, process.env.UPLOAD_DIR))
+    : null,
+  path.join(__dirname, '../documents'),
+  path.join(__dirname, '../uploads'),
   path.join(__dirname, '../../uploads/documents'),
   path.join(__dirname, '../../../storage/documents')
-];
+].filter(Boolean)));
 
-const backendRoot = path.resolve(__dirname, '..', '..');
-const projectRoot = path.resolve(backendRoot, '..');
-const RECOVERY_SEARCH_DIRS = [
+const RECOVERY_SEARCH_DIRS = Array.from(new Set([
+  configuredDocumentsDir,
+  configuredUploadDir,
   path.join(backendRoot, 'src', 'documents'),
   path.join(backendRoot, 'documents'),
   path.join(backendRoot, 'uploads'),
   path.join(projectRoot, 'storage', 'documents'),
   path.join(projectRoot, 'storage', 'uploads')
-];
+].filter(Boolean)));
 
 // ═══════════════════════════════════════════════════════════════
 // STEP 1 FIX: MULTER UPLOAD CONFIGURATION (ALIGNED WITH SERVER.JS)
@@ -62,7 +87,7 @@ for (const dir of UPLOAD_PATHS) {
 }
 
 if (!uploadDir) {
-  uploadDir = path.join(__dirname, '../documents');
+  uploadDir = configuredDocumentsDir || path.join(__dirname, '../documents');
   fs.mkdirSync(uploadDir, { recursive: true });
 }
 
@@ -108,12 +133,30 @@ const upload = multer({
 // ═══════════════════════════════════════════════════════════════
 
 function findDatabase() {
-  for (const dbPath of DB_PATHS) {
+  // If DB_PATH is explicitly configured, never fall back to legacy paths.
+  // Falling back can split auth and documents across different sqlite files.
+  if (envDbPath) {
+    if (fs.existsSync(envDbPath)) {
+      console.log(`[DOCUMENTS] Found configured database at: ${envDbPath}`);
+      return envDbPath;
+    }
+
+    console.warn(`[DOCUMENTS] Configured DB_PATH not found: ${envDbPath}`);
+    return null;
+  }
+
+  if (configuredDbPath && fs.existsSync(configuredDbPath)) {
+    console.log(`[DOCUMENTS] Found configured database at: ${configuredDbPath}`);
+    return configuredDbPath;
+  }
+
+  for (const dbPath of LEGACY_DB_PATHS) {
     if (fs.existsSync(dbPath)) {
-      console.log(`[DOCUMENTS] Found database at: ${dbPath}`);
+      console.log(`[DOCUMENTS] Found legacy database at: ${dbPath}`);
       return dbPath;
     }
   }
+
   console.log('[DOCUMENTS] No database found, will use file system');
   return null;
 }
@@ -165,6 +208,11 @@ function buildDocumentLinks(req, docId, storedName) {
     download_url: docId ? `${baseUrl}/api/documents/${docId}/download` : null,
     static_url: `${baseUrl}/documents/${encodedName}`,
   };
+}
+
+function getRequesterUserId(req) {
+  const id = Number(req?.user?.id);
+  return Number.isInteger(id) && id > 0 ? id : null;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -330,6 +378,11 @@ router.post('/upload', upload.single('document'), async (req, res) => {
   console.log('[DOCUMENTS] POST /api/documents/upload called');
 
   try {
+    const userId = getRequesterUserId(req);
+    if (!userId) {
+      return res.status(401).json({ success: false, error: 'Not authorized. Please login.' });
+    }
+
     if (!req.file) {
       return res.status(400).json({
         success: false,
@@ -365,13 +418,15 @@ router.post('/upload', upload.single('document'), async (req, res) => {
         // Insert into database
         const insertQuery = `
           INSERT INTO documents (
+            owner_user_id,
             original_name, stored_name, file_path, file_type, file_size, 
             main_category, is_bookmarked, access_count, is_deleted, created_at, updated_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `;
 
         const result = await new Promise((resolve, reject) => {
           db.run(insertQuery, [
+            userId,
             documentData.original_name,
             documentData.stored_name,
             documentData.file_path,
@@ -481,7 +536,12 @@ router.post('/upload', upload.single('document'), async (req, res) => {
 // Serve document file by ID
 router.get('/:id/file', async (req, res) => {
   const docId = req.params.id;
+  const userId = getRequesterUserId(req);
   console.log(`[DOCUMENTS] GET /api/documents/${docId}/file`);
+
+  if (!userId) {
+    return res.status(401).json({ success: false, error: 'Not authorized. Please login.' });
+  }
   
   const dbPath = findDatabase();
   
@@ -491,8 +551,8 @@ router.get('/:id/file', async (req, res) => {
       
       const doc = await new Promise((resolve, reject) => {
         db.get(
-          'SELECT * FROM documents WHERE id = ? AND is_deleted = 0',
-          [docId],
+          'SELECT * FROM documents WHERE id = ? AND is_deleted = 0 AND owner_user_id = ?',
+          [docId, userId],
           (err, row) => {
             if (err) reject(err);
             else resolve(row);
@@ -569,7 +629,12 @@ router.get('/:id/file', async (req, res) => {
 // Download document file by ID
 router.get('/:id/download', async (req, res) => {
   const docId = req.params.id;
+  const userId = getRequesterUserId(req);
   console.log(`[DOCUMENTS] GET /api/documents/${docId}/download`);
+
+  if (!userId) {
+    return res.status(401).json({ success: false, error: 'Not authorized. Please login.' });
+  }
   
   const dbPath = findDatabase();
   
@@ -579,8 +644,8 @@ router.get('/:id/download', async (req, res) => {
       
       const doc = await new Promise((resolve, reject) => {
         db.get(
-          'SELECT * FROM documents WHERE id = ? AND is_deleted = 0',
-          [docId],
+          'SELECT * FROM documents WHERE id = ? AND is_deleted = 0 AND owner_user_id = ?',
+          [docId, userId],
           (err, row) => {
             if (err) reject(err);
             else resolve(row);
@@ -642,6 +707,11 @@ router.get('/:id/download', async (req, res) => {
 router.get('/', async (req, res) => {
   console.log('[DOCUMENTS] GET /api/documents called');
 
+  const userId = getRequesterUserId(req);
+  if (!userId) {
+    return res.status(401).json({ success: false, error: 'Not authorized. Please login.' });
+  }
+
   const dbPath = findDatabase();
 
   if (dbPath) {
@@ -653,11 +723,11 @@ router.get('/', async (req, res) => {
           SELECT id, original_name, stored_name, file_path, file_type, file_size, 
                  main_category, sub_category, is_bookmarked, access_count, created_at, updated_at
           FROM documents 
-          WHERE is_deleted = 0
+          WHERE is_deleted = 0 AND owner_user_id = ?
           ORDER BY created_at DESC
         `;
 
-        db.all(query, [], (err, rows) => {
+        db.all(query, [userId], (err, rows) => {
           if (err) reject(err);
           else resolve(rows || []);
         });
@@ -727,6 +797,18 @@ function getDocumentsFromFileSystem(req, res) {
   console.log('[DOCUMENTS] Using file system fallback');
 
   const baseUrl = getRequestBaseUrl(req);
+  const userId = getRequesterUserId(req);
+
+  if (userId) {
+    return res.json({
+      success: true,
+      count: 0,
+      source: 'filesystem',
+      message: 'No documents found for this user.',
+      data: [],
+      documents: [],
+    });
+  }
   
   const possiblePaths = [
     uploadDir,
@@ -854,7 +936,12 @@ function getFilesRecursively(dirPath, relativePath, baseUrl) {
 
 router.get('/:id/info', async (req, res) => {
   const docId = req.params.id;
+  const userId = getRequesterUserId(req);
   console.log(`[DOCUMENTS] GET /api/documents/${docId}/info`);
+
+  if (!userId) {
+    return res.status(401).json({ success: false, error: 'Not authorized. Please login.' });
+  }
   
   const dbPath = findDatabase();
   
@@ -864,8 +951,8 @@ router.get('/:id/info', async (req, res) => {
       
       const doc = await new Promise((resolve, reject) => {
         db.get(
-          'SELECT * FROM documents WHERE id = ? AND is_deleted = 0',
-          [docId],
+          'SELECT * FROM documents WHERE id = ? AND is_deleted = 0 AND owner_user_id = ?',
+          [docId, userId],
           (err, row) => {
             if (err) reject(err);
             else resolve(row);
@@ -920,7 +1007,12 @@ router.get('/:id/info', async (req, res) => {
 
 router.put('/:id/bookmark', async (req, res) => {
   const docId = req.params.id;
+  const userId = getRequesterUserId(req);
   console.log(`[DOCUMENTS] PUT /api/documents/${docId}/bookmark`);
+
+  if (!userId) {
+    return res.status(401).json({ success: false, error: 'Not authorized. Please login.' });
+  }
   
   const dbPath = findDatabase();
   
@@ -930,8 +1022,8 @@ router.put('/:id/bookmark', async (req, res) => {
       
       const currentDoc = await new Promise((resolve, reject) => {
         db.get(
-          'SELECT is_bookmarked FROM documents WHERE id = ? AND is_deleted = 0',
-          [docId],
+          'SELECT is_bookmarked FROM documents WHERE id = ? AND is_deleted = 0 AND owner_user_id = ?',
+          [docId, userId],
           (err, row) => {
             if (err) reject(err);
             else resolve(row);
@@ -948,8 +1040,8 @@ router.put('/:id/bookmark', async (req, res) => {
       
       await new Promise((resolve, reject) => {
         db.run(
-          'UPDATE documents SET is_bookmarked = ?, updated_at = ? WHERE id = ?',
-          [newBookmarkStatus, new Date().toISOString(), docId],
+          'UPDATE documents SET is_bookmarked = ?, updated_at = ? WHERE id = ? AND owner_user_id = ?',
+          [newBookmarkStatus, new Date().toISOString(), docId, userId],
           function(err) {
             if (err) reject(err);
             else resolve({ changes: this.changes });
@@ -976,7 +1068,12 @@ router.put('/:id/bookmark', async (req, res) => {
 
 router.delete('/:id', async (req, res) => {
   const docId = req.params.id;
+  const userId = getRequesterUserId(req);
   console.log(`[DOCUMENTS] DELETE /api/documents/${docId}`);
+
+  if (!userId) {
+    return res.status(401).json({ success: false, error: 'Not authorized. Please login.' });
+  }
   
   const dbPath = findDatabase();
   
@@ -986,8 +1083,8 @@ router.delete('/:id', async (req, res) => {
       
       const doc = await new Promise((resolve, reject) => {
         db.get(
-          'SELECT * FROM documents WHERE id = ?',
-          [docId],
+          'SELECT * FROM documents WHERE id = ? AND owner_user_id = ?',
+          [docId, userId],
           (err, row) => {
             if (err) reject(err);
             else resolve(row);
@@ -1012,8 +1109,8 @@ router.delete('/:id', async (req, res) => {
       
       await new Promise((resolve, reject) => {
         db.run(
-          'DELETE FROM documents WHERE id = ?',
-          [docId],
+          'DELETE FROM documents WHERE id = ? AND owner_user_id = ?',
+          [docId, userId],
           function(err) {
             if (err) reject(err);
             else resolve({ changes: this.changes });
@@ -1034,6 +1131,12 @@ router.delete('/:id', async (req, res) => {
 });
 
 router.get('/meta/categories', async (req, res) => {
+  const userId = getRequesterUserId(req);
+
+  if (!userId) {
+    return res.status(401).json({ success: false, error: 'Not authorized. Please login.' });
+  }
+
   const dbPath = findDatabase();
   
   if (dbPath) {
@@ -1042,8 +1145,8 @@ router.get('/meta/categories', async (req, res) => {
       
       const categories = await new Promise((resolve, reject) => {
         db.all(
-          'SELECT main_category as name, COUNT(*) as count FROM documents WHERE is_deleted = 0 GROUP BY main_category',
-          [],
+          'SELECT main_category as name, COUNT(*) as count FROM documents WHERE is_deleted = 0 AND owner_user_id = ? GROUP BY main_category',
+          [userId],
           (err, rows) => {
             if (err) reject(err);
             else resolve(rows || []);

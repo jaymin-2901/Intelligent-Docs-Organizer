@@ -11,12 +11,22 @@ const logger = {
   error: (msg, err) => console.error(`[ANALYTICS-ERROR] ${msg}`, err || '')
 };
 
+const getUserId = (req) => {
+  const id = Number(req?.user?.id);
+  return Number.isInteger(id) && id > 0 ? id : null;
+};
+
 // ====================
 // RECORD ANALYTICS EVENT
 // ====================
 
 router.post('/event', async (req, res) => {
   try {
+    const userId = getUserId(req);
+    if (!userId) {
+      return res.status(401).json({ success: false, message: 'Not authorized. Please login.' });
+    }
+
     const { documentId, eventType, eventData, durationSeconds } = req.body;
 
     if (!eventType) {
@@ -24,16 +34,18 @@ router.post('/event', async (req, res) => {
     }
 
     await database.run(
-      `INSERT INTO analytics (document_id, event_type, event_data, duration_seconds)
-       VALUES (?, ?, ?, ?)`,
-      [documentId || null, eventType, JSON.stringify(eventData || {}), durationSeconds || 0]
+      `INSERT INTO analytics (user_id, document_id, event_type, event_data, duration_seconds)
+       VALUES (?, ?, ?, ?, ?)`,
+      [userId, documentId || null, eventType, JSON.stringify(eventData || {}), durationSeconds || 0]
     );
 
     // If it's a view event, update access_count on the document
     if (eventType === 'view' && documentId) {
       await database.run(
-        `UPDATE documents SET access_count = access_count + 1, last_accessed = CURRENT_TIMESTAMP WHERE id = ?`,
-        [documentId]
+        `UPDATE documents
+         SET access_count = access_count + 1, last_accessed = CURRENT_TIMESTAMP
+         WHERE id = ? AND owner_user_id = ?`,
+        [documentId, userId]
       );
     }
 
@@ -50,38 +62,57 @@ router.post('/event', async (req, res) => {
 
 router.get('/stats', async (req, res) => {
   try {
+    const userId = getUserId(req);
+    if (!userId) {
+      return res.status(401).json({ success: false, message: 'Not authorized. Please login.' });
+    }
+
     const totalDocs = await database.get(
-      `SELECT COUNT(*) as count FROM documents WHERE is_deleted = 0`
+      `SELECT COUNT(*) as count FROM documents WHERE is_deleted = 0 AND owner_user_id = ?`,
+      [userId]
     );
 
     const totalSize = await database.get(
-      `SELECT COALESCE(SUM(file_size), 0) as total FROM documents WHERE is_deleted = 0`
+      `SELECT COALESCE(SUM(file_size), 0) as total FROM documents WHERE is_deleted = 0 AND owner_user_id = ?`,
+      [userId]
     );
 
     const totalViews = await database.get(
-      `SELECT COALESCE(SUM(access_count), 0) as total FROM documents WHERE is_deleted = 0`
+      `SELECT COALESCE(SUM(access_count), 0) as total FROM documents WHERE is_deleted = 0 AND owner_user_id = ?`,
+      [userId]
     );
 
     const totalReadingTime = await database.get(
-      `SELECT COALESCE(SUM(duration_seconds), 0) as total FROM analytics WHERE event_type = 'view'`
+      `SELECT COALESCE(SUM(duration_seconds), 0) as total
+       FROM analytics
+       WHERE event_type = 'view' AND user_id = ?`,
+      [userId]
     );
 
     const bookmarkedCount = await database.get(
-      `SELECT COUNT(*) as count FROM documents WHERE is_bookmarked = 1 AND is_deleted = 0`
+      `SELECT COUNT(*) as count
+       FROM documents
+       WHERE is_bookmarked = 1 AND is_deleted = 0 AND owner_user_id = ?`,
+      [userId]
     );
 
     const categoriesCount = await database.get(
-      `SELECT COUNT(DISTINCT main_category) as count FROM documents WHERE is_deleted = 0`
+      `SELECT COUNT(DISTINCT main_category) as count
+       FROM documents
+       WHERE is_deleted = 0 AND owner_user_id = ?`,
+      [userId]
     );
 
     const uploadsThisWeek = await database.get(
       `SELECT COUNT(*) as count FROM documents
-       WHERE is_deleted = 0 AND created_at >= datetime('now', '-7 days')`
+       WHERE is_deleted = 0 AND owner_user_id = ? AND created_at >= datetime('now', '-7 days')`,
+      [userId]
     );
 
     const uploadsThisMonth = await database.get(
       `SELECT COUNT(*) as count FROM documents
-       WHERE is_deleted = 0 AND created_at >= datetime('now', '-30 days')`
+       WHERE is_deleted = 0 AND owner_user_id = ? AND created_at >= datetime('now', '-30 days')`,
+      [userId]
     );
 
     res.json({
@@ -109,14 +140,20 @@ router.get('/stats', async (req, res) => {
 
 router.get('/categories', async (req, res) => {
   try {
+    const userId = getUserId(req);
+    if (!userId) {
+      return res.status(401).json({ success: false, message: 'Not authorized. Please login.' });
+    }
+
     const categories = await database.all(
       `SELECT main_category as name, COUNT(*) as count,
               COALESCE(SUM(file_size), 0) as totalSize,
               COALESCE(SUM(access_count), 0) as totalViews
        FROM documents
-       WHERE is_deleted = 0
+       WHERE is_deleted = 0 AND owner_user_id = ?
        GROUP BY main_category
-       ORDER BY count DESC`
+       ORDER BY count DESC`,
+      [userId]
     );
 
     res.json({ success: true, data: categories });
@@ -132,16 +169,21 @@ router.get('/categories', async (req, res) => {
 
 router.get('/most-accessed', async (req, res) => {
   try {
+    const userId = getUserId(req);
+    if (!userId) {
+      return res.status(401).json({ success: false, message: 'Not authorized. Please login.' });
+    }
+
     const limit = parseInt(req.query.limit) || 10;
 
     const docs = await database.all(
       `SELECT id, original_name, main_category, sub_category, access_count,
               last_accessed, file_type, file_size
        FROM documents
-       WHERE is_deleted = 0 AND access_count > 0
+       WHERE is_deleted = 0 AND owner_user_id = ? AND access_count > 0
        ORDER BY access_count DESC
        LIMIT ?`,
-      [limit]
+      [userId, limit]
     );
 
     res.json({ success: true, data: docs });
@@ -157,16 +199,21 @@ router.get('/most-accessed', async (req, res) => {
 
 router.get('/least-accessed', async (req, res) => {
   try {
+    const userId = getUserId(req);
+    if (!userId) {
+      return res.status(401).json({ success: false, message: 'Not authorized. Please login.' });
+    }
+
     const limit = parseInt(req.query.limit) || 10;
 
     const docs = await database.all(
       `SELECT id, original_name, main_category, sub_category, access_count,
               created_at, file_type, file_size
        FROM documents
-       WHERE is_deleted = 0
+       WHERE is_deleted = 0 AND owner_user_id = ?
        ORDER BY access_count ASC, created_at ASC
        LIMIT ?`,
-      [limit]
+      [userId, limit]
     );
 
     res.json({ success: true, data: docs });
@@ -182,15 +229,20 @@ router.get('/least-accessed', async (req, res) => {
 
 router.get('/upload-trends', async (req, res) => {
   try {
+    const userId = getUserId(req);
+    if (!userId) {
+      return res.status(401).json({ success: false, message: 'Not authorized. Please login.' });
+    }
+
     const days = parseInt(req.query.days) || 30;
 
     const trends = await database.all(
       `SELECT DATE(created_at) as date, COUNT(*) as count
        FROM documents
-       WHERE is_deleted = 0 AND created_at >= datetime('now', '-' || ? || ' days')
+       WHERE is_deleted = 0 AND owner_user_id = ? AND created_at >= datetime('now', '-' || ? || ' days')
        GROUP BY DATE(created_at)
        ORDER BY date ASC`,
-      [days]
+      [userId, days]
     );
 
     // Fill in missing dates with 0
@@ -220,16 +272,21 @@ router.get('/upload-trends', async (req, res) => {
 
 router.get('/activity-trends', async (req, res) => {
   try {
+    const userId = getUserId(req);
+    if (!userId) {
+      return res.status(401).json({ success: false, message: 'Not authorized. Please login.' });
+    }
+
     const days = parseInt(req.query.days) || 30;
 
     const trends = await database.all(
       `SELECT DATE(created_at) as date, COUNT(*) as count,
               COALESCE(SUM(duration_seconds), 0) as totalDuration
        FROM analytics
-       WHERE event_type = 'view' AND created_at >= datetime('now', '-' || ? || ' days')
+       WHERE event_type = 'view' AND user_id = ? AND created_at >= datetime('now', '-' || ? || ' days')
        GROUP BY DATE(created_at)
        ORDER BY date ASC`,
-      [days]
+      [userId, days]
     );
 
     const filledTrends = [];
@@ -259,12 +316,18 @@ router.get('/activity-trends', async (req, res) => {
 
 router.get('/file-types', async (req, res) => {
   try {
+    const userId = getUserId(req);
+    if (!userId) {
+      return res.status(401).json({ success: false, message: 'Not authorized. Please login.' });
+    }
+
     const types = await database.all(
       `SELECT file_type as type, COUNT(*) as count, COALESCE(SUM(file_size), 0) as totalSize
        FROM documents
-       WHERE is_deleted = 0
+       WHERE is_deleted = 0 AND owner_user_id = ?
        GROUP BY file_type
-       ORDER BY count DESC`
+       ORDER BY count DESC`,
+      [userId]
     );
 
     res.json({ success: true, data: types });
@@ -280,6 +343,11 @@ router.get('/file-types', async (req, res) => {
 
 router.get('/suggestions', async (req, res) => {
   try {
+    const userId = getUserId(req);
+    if (!userId) {
+      return res.status(401).json({ success: false, message: 'Not authorized. Please login.' });
+    }
+
     const suggestions = [];
 
     // 1. Documents not viewed in a long time
@@ -287,9 +355,11 @@ router.get('/suggestions', async (req, res) => {
       `SELECT id, original_name, main_category, sub_category, last_accessed, created_at
        FROM documents
        WHERE is_deleted = 0
+       AND owner_user_id = ?
        AND (last_accessed IS NULL OR last_accessed < datetime('now', '-7 days'))
        ORDER BY COALESCE(last_accessed, created_at) ASC
-       LIMIT 5`
+       LIMIT 5`,
+      [userId]
     );
 
     for (const doc of staleDocuments) {
@@ -316,11 +386,12 @@ router.get('/suggestions', async (req, res) => {
               COALESCE(SUM(access_count), 0) as totalViews,
               ROUND(COALESCE(SUM(access_count), 0) * 1.0 / COUNT(*), 1) as avgViews
        FROM documents
-       WHERE is_deleted = 0
+       WHERE is_deleted = 0 AND owner_user_id = ?
        GROUP BY main_category
        HAVING avgViews < 2 AND docCount >= 2
        ORDER BY avgViews ASC
-       LIMIT 3`
+       LIMIT 3`,
+      [userId]
     );
 
     for (const cat of weakCategories) {
@@ -340,11 +411,12 @@ router.get('/suggestions', async (req, res) => {
               COALESCE(SUM(access_count), 0) as totalViews,
               ROUND(COALESCE(SUM(access_count), 0) * 1.0 / COUNT(*), 1) as avgViews
        FROM documents
-       WHERE is_deleted = 0
+       WHERE is_deleted = 0 AND owner_user_id = ?
        GROUP BY main_category
        HAVING avgViews >= 5
        ORDER BY avgViews DESC
-       LIMIT 3`
+       LIMIT 3`,
+      [userId]
     );
 
     for (const cat of strongCategories) {
@@ -361,7 +433,9 @@ router.get('/suggestions', async (req, res) => {
     // 4. Recent uploads needing categorization
     const uncategorized = await database.get(
       `SELECT COUNT(*) as count FROM documents
-       WHERE is_deleted = 0 AND (main_category = 'Uncategorized' OR main_category IS NULL)`
+       WHERE is_deleted = 0 AND owner_user_id = ?
+         AND (main_category = 'Uncategorized' OR main_category IS NULL)`,
+      [userId]
     );
 
     if (uncategorized.count > 0) {
@@ -392,17 +466,22 @@ router.get('/suggestions', async (req, res) => {
 
 router.get('/top-keywords', async (req, res) => {
   try {
+    const userId = getUserId(req);
+    if (!userId) {
+      return res.status(401).json({ success: false, message: 'Not authorized. Please login.' });
+    }
+
     const limit = parseInt(req.query.limit) || 20;
 
     const keywords = await database.all(
       `SELECT keyword, COUNT(*) as count
        FROM keywords k
        JOIN documents d ON k.document_id = d.id
-       WHERE d.is_deleted = 0
+       WHERE d.is_deleted = 0 AND d.owner_user_id = ?
        GROUP BY keyword
        ORDER BY count DESC
        LIMIT ?`,
-      [limit]
+      [userId, limit]
     );
 
     res.json({ success: true, data: keywords });
@@ -418,6 +497,11 @@ router.get('/top-keywords', async (req, res) => {
 
 router.get('/weekly-summary', async (req, res) => {
   try {
+    const userId = getUserId(req);
+    if (!userId) {
+      return res.status(401).json({ success: false, message: 'Not authorized. Please login.' });
+    }
+
     const weeksBack = parseInt(req.query.weeks) || 8;
     const summaries = [];
 
@@ -428,18 +512,19 @@ router.get('/weekly-summary', async (req, res) => {
           COALESCE(SUM(file_size), 0) as totalSize
          FROM documents
          WHERE is_deleted = 0
+         AND owner_user_id = ?
          AND created_at >= datetime('now', '-' || ? || ' days')
          AND created_at < datetime('now', '-' || ? || ' days')`,
-        [(i + 1) * 7, i * 7]
+        [userId, (i + 1) * 7, i * 7]
       );
 
       const viewData = await database.get(
         `SELECT COUNT(*) as views, COALESCE(SUM(duration_seconds), 0) as readingTime
          FROM analytics
-         WHERE event_type = 'view'
+         WHERE event_type = 'view' AND user_id = ?
          AND created_at >= datetime('now', '-' || ? || ' days')
          AND created_at < datetime('now', '-' || ? || ' days')`,
-        [(i + 1) * 7, i * 7]
+        [userId, (i + 1) * 7, i * 7]
       );
 
       const weekStart = new Date();

@@ -99,9 +99,10 @@ let uploadRoutes = express.Router(), documentRoutes = express.Router(), analytic
 try { uploadRoutes = require('./routes/uploadRoutes'); } catch (e) { console.warn('No uploadRoutes.js'); }
 try { documentRoutes = require('./routes/documents'); } catch (e) { console.warn('No documents.js'); }
 try { analyticsRoutes = require('./routes/analytics'); } catch (e) { console.warn('No analytics.js'); }
-app.use('/api', uploadRoutes);
 app.use('/api/documents', documentRoutes);
 app.use('/api/analytics', analyticsRoutes);
+// Keep AI upload helper routes, but isolate them to avoid /api/documents collisions.
+app.use('/api/categorization', protect, uploadRoutes);
 
 // Legacy (existing)
 app.post('/api/upload-simple', upload.array('documents', 10), (req, res) => {
@@ -140,7 +141,12 @@ app.get('/api/health', async (req, res) => {
     success: true,
     status: 'healthy',
     authStorage: 'sqlite',
-    endpoints: ['/api/auth/login', '/api/auth/signup', '/api/documents']
+    endpoints: ['/api/auth/login', '/api/auth/signup', '/api/documents', '/api/analytics/stats'],
+    paths: {
+      database: config.database?.path || process.env.DB_PATH || null,
+      upload: config.storage?.uploadPath || process.env.UPLOAD_DIR || null,
+      documents: config.storage?.documentsPath || process.env.DOCUMENTS_DIR || null
+    }
   });
 });
 

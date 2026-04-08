@@ -50,6 +50,7 @@ class Database {
     const tables = [
       `CREATE TABLE IF NOT EXISTS documents (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
+        owner_user_id INTEGER,
         original_name TEXT NOT NULL,
         stored_name TEXT NOT NULL,
         file_path TEXT NOT NULL,
@@ -67,7 +68,8 @@ class Database {
         access_count INTEGER DEFAULT 0,
         is_bookmarked INTEGER DEFAULT 0,
         is_deleted INTEGER DEFAULT 0,
-        metadata TEXT
+        metadata TEXT,
+        FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE SET NULL
       )`,
       
       `CREATE TABLE IF NOT EXISTS categories (
@@ -90,12 +92,14 @@ class Database {
       
       `CREATE TABLE IF NOT EXISTS analytics (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER,
         document_id INTEGER,
         event_type TEXT NOT NULL,
         event_data TEXT,
         duration_seconds INTEGER,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE SET NULL
+        FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE SET NULL,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
       )`,
 
       `CREATE TABLE IF NOT EXISTS users (
@@ -118,8 +122,10 @@ class Database {
     
     const indexes = [
       'CREATE INDEX IF NOT EXISTS idx_documents_category ON documents(main_category, sub_category)',
+      'CREATE INDEX IF NOT EXISTS idx_documents_owner ON documents(owner_user_id)',
       'CREATE INDEX IF NOT EXISTS idx_documents_created ON documents(created_at)',
       'CREATE INDEX IF NOT EXISTS idx_keywords_keyword ON keywords(keyword)',
+      'CREATE INDEX IF NOT EXISTS idx_analytics_user ON analytics(user_id)',
       'CREATE INDEX IF NOT EXISTS idx_analytics_event ON analytics(event_type, created_at)',
       'CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)',
       'CREATE INDEX IF NOT EXISTS idx_users_active ON users(is_active)'
@@ -128,12 +134,48 @@ class Database {
     for (const sql of tables) {
       await this.run(sql);
     }
+
+    await this._applySchemaUpgrades();
     
     for (const sql of indexes) {
       await this.run(sql);
     }
     
     logger.info('Database tables created successfully');
+  }
+
+  async _hasColumn(tableName, columnName) {
+    const rows = await this.all(`PRAGMA table_info(${tableName})`);
+    return rows.some((row) => row.name === columnName);
+  }
+
+  async _applySchemaUpgrades() {
+    if (!(await this._hasColumn('documents', 'owner_user_id'))) {
+      await this.run('ALTER TABLE documents ADD COLUMN owner_user_id INTEGER');
+      logger.info('Added documents.owner_user_id column');
+    }
+
+    if (!(await this._hasColumn('analytics', 'user_id'))) {
+      await this.run('ALTER TABLE analytics ADD COLUMN user_id INTEGER');
+      logger.info('Added analytics.user_id column');
+    }
+
+    // Best-effort backfill for single-user legacy data.
+    await this.run(
+      `UPDATE documents
+       SET owner_user_id = (
+         SELECT id FROM users WHERE is_active = 1 ORDER BY created_at ASC LIMIT 1
+       )
+       WHERE owner_user_id IS NULL`
+    );
+
+    await this.run(
+      `UPDATE analytics
+       SET user_id = (
+         SELECT owner_user_id FROM documents d WHERE d.id = analytics.document_id
+       )
+       WHERE user_id IS NULL AND document_id IS NOT NULL`
+    );
   }
   
   run(sql, params = []) {

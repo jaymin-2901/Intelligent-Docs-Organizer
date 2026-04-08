@@ -40,7 +40,7 @@ class CategorizationService {
     }
   }
   
-  async processDocument(file) {
+  async processDocument(file, options = {}) {
     const startTime = Date.now();
     
     try {
@@ -49,12 +49,20 @@ class CategorizationService {
       const tempPath = file.path;
       const fileType = this.getFileExtension(file.originalname);
       const fileHash = await this.calculateHash(tempPath);
+      const ownerUserId = Number.isInteger(Number(options.ownerUserId)) && Number(options.ownerUserId) > 0
+        ? Number(options.ownerUserId)
+        : null;
       
       // Check for duplicates
-      const existing = await database.get(
-        'SELECT * FROM documents WHERE file_hash = ? AND is_deleted = 0',
-        [fileHash]
-      );
+      const existing = ownerUserId
+        ? await database.get(
+            'SELECT * FROM documents WHERE file_hash = ? AND owner_user_id = ? AND is_deleted = 0',
+            [fileHash, ownerUserId]
+          )
+        : await database.get(
+            'SELECT * FROM documents WHERE file_hash = ? AND is_deleted = 0',
+            [fileHash]
+          );
       
       if (existing) {
         logger.info(`Duplicate document found: ${existing.id}`);
@@ -83,6 +91,7 @@ class CategorizationService {
       );
       
       const docId = await this.saveDocumentRecord({
+        ownerUserId,
         originalName: file.originalname,
         storedName: finalFilename,
         filePath: finalPath,
@@ -149,10 +158,11 @@ class CategorizationService {
   async saveDocumentRecord(data) {
     const result = await database.run(
       `INSERT INTO documents (
-        original_name, stored_name, file_path, file_size, file_type, file_hash,
+        owner_user_id, original_name, stored_name, file_path, file_size, file_type, file_hash,
         main_category, sub_category, keywords, confidence_score, metadata
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
+        data.ownerUserId,
         data.originalName,
         data.storedName,
         data.filePath,
@@ -187,29 +197,46 @@ class CategorizationService {
     await database.transaction(statements);
   }
   
-  async getCategories() {
-    const categories = await database.all(`
+  async getCategories(ownerUserId = null) {
+    let categoriesSql = `
       SELECT 
         main_category as name,
         COUNT(*) as document_count
       FROM documents
       WHERE is_deleted = 0
-      GROUP BY main_category
-      ORDER BY document_count DESC
-    `);
+    `;
+
+    const categoriesParams = [];
+
+    if (ownerUserId) {
+      categoriesSql += ' AND owner_user_id = ?';
+      categoriesParams.push(ownerUserId);
+    }
+
+    categoriesSql += ' GROUP BY main_category ORDER BY document_count DESC';
+
+    const categories = await database.all(categoriesSql, categoriesParams);
     
     const result = [];
     
     for (const cat of categories) {
-      const subCategories = await database.all(`
+      let subSql = `
         SELECT 
           sub_category as name,
           COUNT(*) as document_count
         FROM documents
         WHERE is_deleted = 0 AND main_category = ?
-        GROUP BY sub_category
-        ORDER BY document_count DESC
-      `, [cat.name]);
+      `;
+
+      const subParams = [cat.name];
+      if (ownerUserId) {
+        subSql += ' AND owner_user_id = ?';
+        subParams.push(ownerUserId);
+      }
+
+      subSql += ' GROUP BY sub_category ORDER BY document_count DESC';
+
+      const subCategories = await database.all(subSql, subParams);
       
       result.push({
         name: cat.name,
@@ -225,7 +252,7 @@ class CategorizationService {
   }
   
   async getDocuments(mainCategory = null, subCategory = null, options = {}) {
-    const { limit = 50, offset = 0 } = options;
+    const { limit = 50, offset = 0, ownerUserId = null } = options;
     
     let sql = `
       SELECT 
@@ -237,6 +264,11 @@ class CategorizationService {
     `;
     
     const params = [];
+
+    if (ownerUserId) {
+      sql += ' AND owner_user_id = ?';
+      params.push(ownerUserId);
+    }
     
     if (mainCategory) {
       sql += ' AND main_category = ?';
@@ -259,16 +291,26 @@ class CategorizationService {
     }));
   }
   
-  async searchDocuments(query) {
+  async searchDocuments(query, ownerUserId = null) {
     const searchQuery = `%${query.toLowerCase()}%`;
-    
-    const documents = await database.all(`
+
+    let sql = `
       SELECT DISTINCT
         d.id, d.original_name, d.stored_name, d.file_path,
         d.main_category, d.sub_category, d.keywords, d.created_at
       FROM documents d
       LEFT JOIN keywords k ON d.id = k.document_id
       WHERE d.is_deleted = 0
+    `;
+
+    const params = [];
+
+    if (ownerUserId) {
+      sql += ' AND d.owner_user_id = ?';
+      params.push(ownerUserId);
+    }
+
+    sql += `
       AND (
         LOWER(d.original_name) LIKE ? OR
         LOWER(k.keyword) LIKE ? OR
@@ -276,7 +318,11 @@ class CategorizationService {
       )
       ORDER BY d.created_at DESC
       LIMIT 20
-    `, [searchQuery, searchQuery, searchQuery]);
+    `;
+
+    params.push(searchQuery, searchQuery, searchQuery);
+
+    const documents = await database.all(sql, params);
     
     return documents.map(doc => ({
       ...doc,
@@ -284,16 +330,23 @@ class CategorizationService {
     }));
   }
   
-  async getDocument(id) {
-    const doc = await database.get(
-      'SELECT * FROM documents WHERE id = ? AND is_deleted = 0',
-      [id]
-    );
+  async getDocument(id, ownerUserId = null) {
+    const doc = ownerUserId
+      ? await database.get(
+          'SELECT * FROM documents WHERE id = ? AND owner_user_id = ? AND is_deleted = 0',
+          [id, ownerUserId]
+        )
+      : await database.get(
+          'SELECT * FROM documents WHERE id = ? AND is_deleted = 0',
+          [id]
+        );
     
     if (doc) {
       await database.run(
-        'UPDATE documents SET access_count = access_count + 1, last_accessed = CURRENT_TIMESTAMP WHERE id = ?',
-        [id]
+        ownerUserId
+          ? 'UPDATE documents SET access_count = access_count + 1, last_accessed = CURRENT_TIMESTAMP WHERE id = ? AND owner_user_id = ?'
+          : 'UPDATE documents SET access_count = access_count + 1, last_accessed = CURRENT_TIMESTAMP WHERE id = ?',
+        ownerUserId ? [id, ownerUserId] : [id]
       );
       
       return {

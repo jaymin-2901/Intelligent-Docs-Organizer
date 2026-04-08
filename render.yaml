@@ -4,6 +4,10 @@ services:
     runtime: docker
     plan: free
     autoDeployTrigger: commit
+    disk:
+      name: intelligent-doc-organizer-data
+      mountPath: /var/data
+      sizeGB: 1
     dockerfilePath: ./backend/Dockerfile
     dockerContext: .
     healthCheckPath: /api/health
@@ -21,11 +25,11 @@ services:
       - key: CLIENT_URL
         sync: false
       - key: DB_PATH
-        value: /tmp/ido/database/documents.db
+        value: /var/data/documents.db
       - key: UPLOAD_DIR
-        value: /tmp/ido/uploads
+        value: /var/data/uploads
       - key: DOCUMENTS_DIR
-        value: /tmp/ido/documents
+        value: /var/data/documents
       - key: PYTHON_PATH
         value: /app/python/document_ai.py
       - key: PYTHON_COMMAND

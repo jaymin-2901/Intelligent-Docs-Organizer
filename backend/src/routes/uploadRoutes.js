@@ -27,11 +27,24 @@ const upload = multer({
   limits: { fileSize: 50 * 1024 * 1024 }
 });
 
+const getRequesterUserId = (req) => {
+  const id = Number(req?.user?.id);
+  return Number.isInteger(id) && id > 0 ? id : null;
+};
+
 // ==================== ROUTES ====================
 
 // Single document upload with AI categorization
 router.post('/upload', upload.single('document'), async (req, res) => {
   try {
+    const userId = getRequesterUserId(req);
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Not authorized. Please login.'
+      });
+    }
+
     if (!req.file) {
       return res.status(400).json({
         success: false,
@@ -47,7 +60,7 @@ router.post('/upload', upload.single('document'), async (req, res) => {
       originalname: req.file.originalname,
       size: req.file.size,
       mimetype: req.file.mimetype
-    });
+    }, { ownerUserId: userId });
 
     res.json({
       success: true,
@@ -67,6 +80,14 @@ router.post('/upload', upload.single('document'), async (req, res) => {
 // Multiple documents upload
 router.post('/upload-multiple', upload.array('documents', 10), async (req, res) => {
   try {
+    const userId = getRequesterUserId(req);
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Not authorized. Please login.'
+      });
+    }
+
     if (!req.files || req.files.length === 0) {
       return res.status(400).json({
         success: false,
@@ -84,7 +105,7 @@ router.post('/upload-multiple', upload.array('documents', 10), async (req, res) 
           originalname: file.originalname,
           size: file.size,
           mimetype: file.mimetype
-        });
+        }, { ownerUserId: userId });
         results.push(result);
       } catch (err) {
         results.push({
@@ -112,7 +133,15 @@ router.post('/upload-multiple', upload.array('documents', 10), async (req, res) 
 // Get all categories with document counts
 router.get('/categories', async (req, res) => {
   try {
-    const categories = await categorizationService.getCategories();
+    const userId = getRequesterUserId(req);
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Not authorized. Please login.'
+      });
+    }
+
+    const categories = await categorizationService.getCategories(userId);
     res.json({
       success: true,
       data: categories
@@ -128,8 +157,18 @@ router.get('/categories', async (req, res) => {
 // Get documents by category
 router.get('/documents', async (req, res) => {
   try {
+    const userId = getRequesterUserId(req);
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Not authorized. Please login.'
+      });
+    }
+
     const { mainCategory, subCategory } = req.query;
-    const documents = await categorizationService.getDocuments(mainCategory, subCategory);
+    const documents = await categorizationService.getDocuments(mainCategory, subCategory, {
+      ownerUserId: userId
+    });
     res.json({
       success: true,
       data: documents
@@ -145,7 +184,15 @@ router.get('/documents', async (req, res) => {
 // Get single document
 router.get('/documents/:id', async (req, res) => {
   try {
-    const document = await categorizationService.getDocument(req.params.id);
+    const userId = getRequesterUserId(req);
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Not authorized. Please login.'
+      });
+    }
+
+    const document = await categorizationService.getDocument(req.params.id, userId);
     if (!document) {
       return res.status(404).json({
         success: false,
@@ -167,6 +214,14 @@ router.get('/documents/:id', async (req, res) => {
 // Search documents
 router.get('/search', async (req, res) => {
   try {
+    const userId = getRequesterUserId(req);
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Not authorized. Please login.'
+      });
+    }
+
     const { q } = req.query;
     if (!q) {
       return res.status(400).json({
@@ -174,7 +229,7 @@ router.get('/search', async (req, res) => {
         message: 'Search query required'
       });
     }
-    const documents = await categorizationService.searchDocuments(q);
+    const documents = await categorizationService.searchDocuments(q, userId);
     res.json({
       success: true,
       data: documents
@@ -190,8 +245,19 @@ router.get('/search', async (req, res) => {
 // Toggle bookmark
 router.put('/documents/:id/bookmark', async (req, res) => {
   try {
+    const userId = getRequesterUserId(req);
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Not authorized. Please login.'
+      });
+    }
+
     const database = require('../models/database');
-    const doc = await database.get('SELECT * FROM documents WHERE id = ?', [req.params.id]);
+    const doc = await database.get(
+      'SELECT * FROM documents WHERE id = ? AND owner_user_id = ? AND is_deleted = 0',
+      [req.params.id, userId]
+    );
     
     if (!doc) {
       return res.status(404).json({
@@ -201,7 +267,10 @@ router.put('/documents/:id/bookmark', async (req, res) => {
     }
 
     const newStatus = doc.is_bookmarked ? 0 : 1;
-    await database.run('UPDATE documents SET is_bookmarked = ? WHERE id = ?', [newStatus, req.params.id]);
+    await database.run(
+      'UPDATE documents SET is_bookmarked = ? WHERE id = ? AND owner_user_id = ?',
+      [newStatus, req.params.id, userId]
+    );
 
     res.json({
       success: true,
@@ -218,8 +287,19 @@ router.put('/documents/:id/bookmark', async (req, res) => {
 // Delete document
 router.delete('/documents/:id', async (req, res) => {
   try {
+    const userId = getRequesterUserId(req);
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Not authorized. Please login.'
+      });
+    }
+
     const database = require('../models/database');
-    const doc = await database.get('SELECT * FROM documents WHERE id = ?', [req.params.id]);
+    const doc = await database.get(
+      'SELECT * FROM documents WHERE id = ? AND owner_user_id = ? AND is_deleted = 0',
+      [req.params.id, userId]
+    );
     
     if (!doc) {
       return res.status(404).json({
@@ -234,7 +314,10 @@ router.delete('/documents/:id', async (req, res) => {
     }
 
     // Soft delete in database
-    await database.run('UPDATE documents SET is_deleted = 1 WHERE id = ?', [req.params.id]);
+    await database.run(
+      'UPDATE documents SET is_deleted = 1 WHERE id = ? AND owner_user_id = ?',
+      [req.params.id, userId]
+    );
 
     res.json({
       success: true,
