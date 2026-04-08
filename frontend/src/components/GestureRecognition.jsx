@@ -63,6 +63,18 @@ const MOTION_GESTURES = new Set([
 const SCROLL_GESTURES = new Set(['SWIPE_UP', 'SWIPE_DOWN']);
 const PAGE_SWIPE_GESTURES = new Set(['SWIPE_LEFT', 'SWIPE_RIGHT']);
 
+const isCameraBusyError = (err) => {
+  const name = String(err?.name || '').toLowerCase();
+  const message = String(err?.message || '').toLowerCase();
+
+  return (
+    name === 'notreadableerror'
+    || message.includes('device in use')
+    || message.includes('could not start video source')
+    || message.includes('track start error')
+  );
+};
+
 const CONNECTIONS = [
   [0,1],[1,2],[2,3],[3,4],
   [0,5],[5,6],[6,7],[7,8],
@@ -619,10 +631,20 @@ const GestureRecognition = ({ enabled, onGestureDetected, onStatusChange }) => {
 
         streamRef.current?.getTracks().forEach(t => t.stop());
 
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' },
-          audio: false,
-        });
+        let stream;
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' },
+            audio: false,
+          });
+        } catch (mediaErr) {
+          if (isCameraBusyError(mediaErr)) {
+            throw new Error(
+              'Camera is already in use by another app. Close other camera apps and try again.'
+            );
+          }
+          throw mediaErr;
+        }
 
         if (cancelled) { stream.getTracks().forEach(t => t.stop()); return; }
 

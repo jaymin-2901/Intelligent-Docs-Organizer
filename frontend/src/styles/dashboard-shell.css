@@ -60,12 +60,47 @@
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: none;
   }
 }
 
 .dashboard-shell--collapsed {
   --shell-sidebar-width: 92px;
+}
+
+.dashboard-shell--doc-immersive {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.dashboard-shell--doc-immersive .dashboard-shell__sidebar,
+.dashboard-shell--doc-immersive .dashboard-topbar,
+.dashboard-shell--doc-immersive .dashboard-fab-stack {
+  display: none;
+}
+
+.dashboard-shell--doc-immersive .dashboard-shell__main {
+  padding: 0;
+}
+
+.dashboard-shell--doc-immersive .docview-page {
+  gap: 0;
+}
+
+.dashboard-shell--doc-immersive .docview-toolbar,
+.dashboard-shell--doc-immersive .docview-list {
+  display: none;
+}
+
+.dashboard-shell--doc-immersive .docview-layout {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
+}
+
+.dashboard-shell--doc-immersive .docview-viewer {
+  min-height: 100vh;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
 }
 
 .dashboard-shell__sidebar {

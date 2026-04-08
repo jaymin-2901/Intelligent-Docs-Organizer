@@ -41,6 +41,55 @@ const DASHBOARD_SHORTCUTS = [
   { keys: 'B', action: 'Bookmark selected document' },
 ];
 
+const getFullscreenElement = () => (
+  document.fullscreenElement
+  || document.webkitFullscreenElement
+  || document.msFullscreenElement
+  || null
+);
+
+const requestElementFullscreen = async (element) => {
+  if (!element) {
+    throw new Error('No element available for fullscreen.');
+  }
+
+  if (element.requestFullscreen) {
+    await element.requestFullscreen();
+    return;
+  }
+  if (element.webkitRequestFullscreen) {
+    await element.webkitRequestFullscreen();
+    return;
+  }
+  if (element.msRequestFullscreen) {
+    await element.msRequestFullscreen();
+  }
+};
+
+const exitAnyFullscreen = async () => {
+  if (document.exitFullscreen) {
+    await document.exitFullscreen();
+    return;
+  }
+  if (document.webkitExitFullscreen) {
+    await document.webkitExitFullscreen();
+    return;
+  }
+  if (document.msExitFullscreen) {
+    await document.msExitFullscreen();
+  }
+};
+
+const isScrollableElement = (element) => {
+  if (!(element instanceof HTMLElement)) return false;
+
+  const style = window.getComputedStyle(element);
+  const overflowY = style.overflowY;
+  const canScroll = overflowY === 'auto' || overflowY === 'scroll' || overflowY === 'overlay';
+
+  return canScroll && element.scrollHeight - element.clientHeight > 8;
+};
+
 function RouteSectionFallback({ label = 'Loading section...' }) {
   return (
     <div className="route-section-fallback" aria-live="polite" aria-busy="true">
@@ -498,6 +547,7 @@ function DashboardContent() {
   const navigate = useNavigate();
   const location = useLocation();
   const topSearchInputRef = useRef(null);
+  const mainContentRef = useRef(null);
   const pendingGotoRef = useRef(false);
   const pendingGotoTimeoutRef = useRef(null);
   const [gestureEnabled, setGestureEnabled] = useState(false);
@@ -507,6 +557,7 @@ function DashboardContent() {
   const [isTopSearchFocused, setIsTopSearchFocused] = useState(false);
   const [fabOpen, setFabOpen] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
+  const [docImmersiveMode, setDocImmersiveMode] = useState(false);
 
   const pageMeta = useMemo(() => {
     const path = location.pathname;
@@ -539,6 +590,37 @@ function DashboardContent() {
 
   useEffect(() => {
     setFabOpen(false);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    if (location.pathname.includes('/doc-view')) return;
+    setDocImmersiveMode(false);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    const onImmersiveChange = (event) => {
+      const active = Boolean(event?.detail?.active);
+      const inDocView = location.pathname.includes('/doc-view');
+
+      if (!inDocView) {
+        setDocImmersiveMode(false);
+        return;
+      }
+
+      setDocImmersiveMode(active);
+
+      if (active) {
+        setFabOpen(false);
+        setShowShortcuts(false);
+        setIsTopSearchFocused(false);
+        topSearchInputRef.current?.blur();
+      }
+    };
+
+    window.addEventListener('dv-immersive-change', onImmersiveChange);
+    return () => {
+      window.removeEventListener('dv-immersive-change', onImmersiveChange);
+    };
   }, [location.pathname]);
 
   useEffect(() => {
@@ -718,6 +800,84 @@ function DashboardContent() {
     };
   }, [navigate]);
 
+  const dispatchConsumableEvent = useCallback((name, detail = {}) => {
+    const payload = { ...detail, consumed: false };
+    window.dispatchEvent(new CustomEvent(name, { detail: payload }));
+    return Boolean(payload.consumed);
+  }, []);
+
+  const closeTopDashboardLayer = useCallback(() => {
+    if (showShortcuts) {
+      setShowShortcuts(false);
+      return true;
+    }
+
+    if (fabOpen) {
+      setFabOpen(false);
+      return true;
+    }
+
+    if (document.activeElement === topSearchInputRef.current) {
+      topSearchInputRef.current?.blur();
+      setIsTopSearchFocused(false);
+      return true;
+    }
+
+    return false;
+  }, [fabOpen, showShortcuts]);
+
+  const findScrollableTarget = useCallback(() => {
+    const root = mainContentRef.current;
+    if (!root) return null;
+
+    const preferredSelectors = [
+      '.analytics-dashboard',
+      '.gesture-guide',
+      '.categories-page',
+      '.overview-page',
+      '.docview-list',
+      '.docview-page',
+    ];
+
+    for (const selector of preferredSelectors) {
+      const candidate = root.querySelector(selector);
+      if (isScrollableElement(candidate)) {
+        return candidate;
+      }
+    }
+
+    const descendants = root.querySelectorAll('*');
+    for (const node of descendants) {
+      if (isScrollableElement(node)) {
+        return node;
+      }
+    }
+
+    return isScrollableElement(root) ? root : null;
+  }, []);
+
+  const scrollActiveSection = useCallback((direction, amount) => {
+    const delta = direction === 'down' ? amount : -amount;
+    const target = findScrollableTarget();
+
+    if (!target) {
+      window.scrollBy({ top: delta, behavior: 'smooth' });
+      return;
+    }
+
+    target.scrollBy({ top: delta, behavior: 'smooth' });
+  }, [findScrollableTarget]);
+
+  const toggleWorkspaceFullscreen = useCallback(async () => {
+    if (getFullscreenElement()) {
+      await exitAnyFullscreen();
+      return;
+    }
+
+    const target = mainContentRef.current || document.documentElement;
+    await requestElementFullscreen(target);
+  }, []);
+
   const handleGestureDetected = useCallback((event) => {
     const action = event?.action;
     const pointerAnchor = event?.pointer &&
@@ -748,12 +908,20 @@ function DashboardContent() {
           detail: { delta: -0.16, anchor: pointerAnchor },
         }));
         break;
-      case 'scrollUp':
-        window.dispatchEvent(new CustomEvent('dv-scroll', { detail: { direction: 'up', amount: 240 } }));
+      case 'scrollUp': {
+        const consumed = dispatchConsumableEvent('dv-scroll', { direction: 'up', amount: 240 });
+        if (!consumed) {
+          scrollActiveSection('up', 240);
+        }
         break;
-      case 'scrollDown':
-        window.dispatchEvent(new CustomEvent('dv-scroll', { detail: { direction: 'down', amount: 240 } }));
+      }
+      case 'scrollDown': {
+        const consumed = dispatchConsumableEvent('dv-scroll', { direction: 'down', amount: 240 });
+        if (!consumed) {
+          scrollActiveSection('down', 240);
+        }
         break;
+      }
       case 'bookmark':
         window.dispatchEvent(new Event('dv-bookmark'));
         break;
@@ -761,7 +929,26 @@ function DashboardContent() {
         window.dispatchEvent(new Event('dv-select-next-doc'));
         break;
       case 'close':
-        window.dispatchEvent(new Event('dv-close-doc'));
+        if (closeTopDashboardLayer()) {
+          break;
+        }
+
+        if (dispatchConsumableEvent('dv-close-layer', { source: 'gesture-close' })) {
+          break;
+        }
+
+        if (dispatchConsumableEvent('dv-close-doc', { source: 'gesture-close' })) {
+          break;
+        }
+
+        if (getFullscreenElement()) {
+          exitAnyFullscreen().catch(() => {});
+          break;
+        }
+
+        if (location.pathname.includes('/dashboard/') && !location.pathname.includes('/overview')) {
+          navigate('/dashboard/overview');
+        }
         break;
       case 'showDocuments':
         navigate('/dashboard/doc-view');
@@ -770,9 +957,13 @@ function DashboardContent() {
       case 'fullscreen':
       case 'fullScreen':
       case 'toggleFullscreen':
-      case 'yoyo':
-        window.dispatchEvent(new Event('dv-fullscreen-toggle'));
+      case 'yoyo': {
+        const consumed = dispatchConsumableEvent('dv-fullscreen-toggle', { source: 'gesture-fullscreen' });
+        if (!consumed) {
+          toggleWorkspaceFullscreen().catch(() => {});
+        }
         break;
+      }
       case 'customThree':
         navigate('/dashboard/gesture-guide');
         break;
@@ -790,10 +981,17 @@ function DashboardContent() {
       default:
         break;
     }
-  }, [navigate]);
+  }, [
+    closeTopDashboardLayer,
+    dispatchConsumableEvent,
+    location.pathname,
+    navigate,
+    scrollActiveSection,
+    toggleWorkspaceFullscreen,
+  ]);
 
   return (
-    <div className={`dashboard-shell ${sidebarCollapsed ? 'dashboard-shell--collapsed' : 'dashboard-shell--expanded'}`}>
+    <div className={`dashboard-shell ${sidebarCollapsed ? 'dashboard-shell--collapsed' : 'dashboard-shell--expanded'} ${docImmersiveMode ? 'dashboard-shell--doc-immersive' : ''}`}>
       <a className="dashboard-skip-link" href="#dashboard-main-content">
         Skip to main content
       </a>
@@ -905,7 +1103,7 @@ function DashboardContent() {
           </div>
         </header>
 
-        <main id="dashboard-main-content" className="dashboard-shell__main" tabIndex={-1}>
+        <main id="dashboard-main-content" className="dashboard-shell__main" tabIndex={-1} ref={mainContentRef}>
           <Suspense fallback={<RouteSectionFallback label="Loading workspace section..." />}>
             <Routes>
               <Route index element={<Navigate to="overview" replace />} />

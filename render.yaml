@@ -1,0 +1,36 @@
+services:
+  - type: web
+    name: intelligent-doc-organizer-api
+    env: docker
+    plan: free
+    autoDeploy: true
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: .
+    healthCheckPath: /api/health
+    disks:
+      - name: backend-data
+        mountPath: /var/data
+        sizeGB: 1
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: HOST
+        value: 0.0.0.0
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_EXPIRES_IN
+        value: 7d
+      - key: JWT_REMEMBER_EXPIRES
+        value: 30d
+      - key: CLIENT_URL
+        sync: false
+      - key: DB_PATH
+        value: /var/data/database/documents.db
+      - key: UPLOAD_DIR
+        value: /var/data/uploads
+      - key: DOCUMENTS_DIR
+        value: /var/data/documents
+      - key: PYTHON_PATH
+        value: /app/python/document_ai.py
+      - key: PYTHON_COMMAND
+        value: python3

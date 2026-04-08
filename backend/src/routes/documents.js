@@ -33,6 +33,16 @@ const UPLOAD_PATHS = [
   path.join(__dirname, '../../../storage/documents')
 ];
 
+const backendRoot = path.resolve(__dirname, '..', '..');
+const projectRoot = path.resolve(backendRoot, '..');
+const RECOVERY_SEARCH_DIRS = [
+  path.join(backendRoot, 'src', 'documents'),
+  path.join(backendRoot, 'documents'),
+  path.join(backendRoot, 'uploads'),
+  path.join(projectRoot, 'storage', 'documents'),
+  path.join(projectRoot, 'storage', 'uploads')
+];
+
 // ═══════════════════════════════════════════════════════════════
 // STEP 1 FIX: MULTER UPLOAD CONFIGURATION (ALIGNED WITH SERVER.JS)
 // ═══════════════════════════════════════════════════════════════
@@ -126,23 +136,53 @@ function categorizeFile(filename, fileType) {
   return 'Uncategorized';
 }
 
+function getRequestBaseUrl(req) {
+  const configuredBase = (process.env.PUBLIC_API_BASE_URL || process.env.PUBLIC_BASE_URL || '').trim();
+  if (configuredBase) {
+    return configuredBase.replace(/\/+$/, '');
+  }
+
+  const protoHeader = req?.headers?.['x-forwarded-proto'];
+  const hostHeader = req?.headers?.['x-forwarded-host'];
+
+  const proto = String(protoHeader || req?.protocol || 'http')
+    .split(',')[0]
+    .trim();
+
+  const host = String(hostHeader || req?.get?.('host') || `localhost:${process.env.PORT || 5000}`)
+    .split(',')[0]
+    .trim();
+
+  return `${proto}://${host}`;
+}
+
+function buildDocumentLinks(req, docId, storedName) {
+  const baseUrl = getRequestBaseUrl(req);
+  const encodedName = encodeURIComponent(storedName || '');
+
+  return {
+    file_url: docId ? `${baseUrl}/api/documents/${docId}/file` : null,
+    download_url: docId ? `${baseUrl}/api/documents/${docId}/download` : null,
+    static_url: `${baseUrl}/documents/${encodedName}`,
+  };
+}
+
 // ═══════════════════════════════════════════════════════════════
 // STEP 1 FIX: UTILITY FUNCTIONS (ALIGNED WITH SERVER.JS)
 // ═══════════════════════════════════════════════════════════════
 
-function buildFileUrl(category, filename, docId = null) {
+function buildFileUrl(req, category, filename, docId = null) {
   if (!filename) return null;
-  
-  // STEP 1 FIX: Use server.js static serving endpoints
-  const baseUrl = 'http://localhost:5000';
+
+  const links = buildDocumentLinks(req, docId, filename);
   
   // Option 1: API route for file serving (most reliable)
   if (docId) {
-    return `${baseUrl}/api/documents/${docId}/file`;
+    return links.file_url;
   }
   
   // Option 2: Direct static serving (matches server.js setup)
-  return `${baseUrl}/documents/${encodeURIComponent(filename)}`;
+  return links.static_url;
 }
 
 function getMimeType(fileType) {
@@ -157,6 +197,107 @@ function getMimeType(fileType) {
     'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
   };
   return mimeTypes[fileType] || 'application/octet-stream';
+}
+
+function isExistingFile(filePath) {
+  if (!filePath) return false;
+  try {
+    return fs.existsSync(filePath) && fs.statSync(filePath).isFile();
+  } catch {
+    return false;
+  }
+}
+
+function findFileByName(rootDir, fileName, maxDepth = 4) {
+  if (!rootDir || !fileName || !fs.existsSync(rootDir)) return null;
+
+  const target = String(fileName).toLowerCase();
+  const stack = [{ dir: rootDir, depth: 0 }];
+
+  while (stack.length > 0) {
+    const { dir, depth } = stack.pop();
+    if (depth > maxDepth) continue;
+
+    let entries = [];
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+
+    for (const entry of entries) {
+      const fullPath = path.join(dir, entry.name);
+      if (entry.isFile() && entry.name.toLowerCase() === target) {
+        return fullPath;
+      }
+
+      if (entry.isDirectory() && !entry.name.startsWith('.')) {
+        stack.push({ dir: fullPath, depth: depth + 1 });
+      }
+    }
+  }
+
+  return null;
+}
+
+function resolveDocumentFilePath(document = {}) {
+  if (isExistingFile(document.file_path)) {
+    return document.file_path;
+  }
+
+  const fileNames = [
+    document.stored_name,
+    document.file_path ? path.basename(document.file_path) : null,
+    document.original_name,
+  ].filter(Boolean);
+
+  const directCandidates = [];
+
+  // Recover from old absolute paths after moving the project folder.
+  if (document.file_path) {
+    const normalized = String(document.file_path).replace(/\//g, '\\');
+    const marker = '\\backend\\';
+    const idx = normalized.toLowerCase().indexOf(marker);
+    if (idx >= 0) {
+      const relativeFromBackend = normalized.slice(idx + marker.length);
+      if (relativeFromBackend) {
+        directCandidates.push(path.join(backendRoot, relativeFromBackend));
+      }
+    }
+  }
+
+  for (const baseDir of RECOVERY_SEARCH_DIRS) {
+    for (const fileName of fileNames) {
+      directCandidates.push(path.join(baseDir, fileName));
+
+      if (document.main_category) {
+        directCandidates.push(path.join(baseDir, document.main_category, fileName));
+      }
+
+      if (document.main_category && document.sub_category) {
+        directCandidates.push(
+          path.join(baseDir, document.main_category, document.sub_category, fileName)
+        );
+      }
+    }
+  }
+
+  for (const candidate of directCandidates) {
+    if (isExistingFile(candidate)) {
+      return candidate;
+    }
+  }
+
+  for (const fileName of fileNames) {
+    for (const baseDir of RECOVERY_SEARCH_DIRS) {
+      const found = findFileByName(baseDir, fileName);
+      if (found) {
+        return found;
+      }
+    }
+  }
+
+  return null;
 }
 
 async function updateAccessCount(docId) {
@@ -270,6 +411,8 @@ router.post('/upload', upload.single('document'), async (req, res) => {
       };
     }
 
+    const links = buildDocumentLinks(req, savedDoc.id, savedDoc.stored_name);
+
     // STEP 1 FIX: Return consistent format expected by frontend
     const responseDoc = {
       id: savedDoc.id,
@@ -292,11 +435,11 @@ router.post('/upload', upload.single('document'), async (req, res) => {
       category: savedDoc.main_category,
       size: savedDoc.file_size,
       uploadDate: savedDoc.created_at,
-      url: buildFileUrl(savedDoc.main_category, savedDoc.stored_name, savedDoc.id),
+      url: buildFileUrl(req, savedDoc.main_category, savedDoc.stored_name, savedDoc.id),
       // Additional URLs for flexibility
-      file_url: `http://localhost:5000/api/documents/${savedDoc.id}/file`,
-      download_url: `http://localhost:5000/api/documents/${savedDoc.id}/download`,
-      static_url: `http://localhost:5000/documents/${encodeURIComponent(savedDoc.stored_name)}`
+      file_url: links.file_url,
+      download_url: links.download_url,
+      static_url: links.static_url
     };
 
     console.log('✅ Document uploaded successfully:', responseDoc.original_name);
@@ -344,7 +487,7 @@ router.get('/:id/file', async (req, res) => {
   
   if (dbPath) {
     try {
-      const db = await getDbConnection(dbPath, sqlite3.OPEN_READONLY);
+      const db = await getDbConnection(dbPath);
       
       const doc = await new Promise((resolve, reject) => {
         db.get(
@@ -357,17 +500,34 @@ router.get('/:id/file', async (req, res) => {
         );
       });
 
-      db.close();
-      
       if (!doc) {
+        db.close();
         return res.status(404).json({ success: false, error: 'Document not found' });
       }
 
-      // Check if file exists
-      if (!fs.existsSync(doc.file_path)) {
+      const resolvedPath = resolveDocumentFilePath(doc);
+      if (!resolvedPath) {
+        db.close();
         console.error(`[DOCUMENTS] File not found on disk: ${doc.file_path}`);
         return res.status(404).json({ success: false, error: 'File not found on disk' });
       }
+
+      if (doc.file_path !== resolvedPath) {
+        await new Promise((resolve, reject) => {
+          db.run(
+            'UPDATE documents SET file_path = ?, updated_at = ? WHERE id = ?',
+            [resolvedPath, new Date().toISOString(), docId],
+            (err) => {
+              if (err) reject(err);
+              else resolve();
+            }
+          );
+        }).catch((err) => {
+          console.warn('[DOCUMENTS] Could not update recovered file path:', err.message);
+        });
+      }
+
+      db.close();
 
       // Set proper headers for inline viewing
       const fileName = doc.original_name || doc.stored_name;
@@ -379,7 +539,7 @@ router.get('/:id/file', async (req, res) => {
       res.setHeader('Cache-Control', 'public, max-age=3600');
       
       // Stream the file
-      const fileStream = fs.createReadStream(doc.file_path);
+      const fileStream = fs.createReadStream(resolvedPath);
       
       fileStream.on('error', (err) => {
         console.error(`[DOCUMENTS] File stream error: ${err.message}`);
@@ -415,7 +575,7 @@ router.get('/:id/download', async (req, res) => {
   
   if (dbPath) {
     try {
-      const db = await getDbConnection(dbPath, sqlite3.OPEN_READONLY);
+      const db = await getDbConnection(dbPath);
       
       const doc = await new Promise((resolve, reject) => {
         db.get(
@@ -428,18 +588,40 @@ router.get('/:id/download', async (req, res) => {
         );
       });
 
-      db.close();
-      
-      if (!doc || !fs.existsSync(doc.file_path)) {
+      if (!doc) {
+        db.close();
         return res.status(404).json({ success: false, error: 'File not found' });
       }
+
+      const resolvedPath = resolveDocumentFilePath(doc);
+      if (!resolvedPath) {
+        db.close();
+        return res.status(404).json({ success: false, error: 'File not found' });
+      }
+
+      if (doc.file_path !== resolvedPath) {
+        await new Promise((resolve, reject) => {
+          db.run(
+            'UPDATE documents SET file_path = ?, updated_at = ? WHERE id = ?',
+            [resolvedPath, new Date().toISOString(), docId],
+            (err) => {
+              if (err) reject(err);
+              else resolve();
+            }
+          );
+        }).catch((err) => {
+          console.warn('[DOCUMENTS] Could not update recovered file path:', err.message);
+        });
+      }
+
+      db.close();
 
       const fileName = doc.original_name || doc.stored_name;
       res.setHeader('Content-Type', 'application/octet-stream');
       res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
       res.setHeader('Access-Control-Allow-Origin', '*');
       
-      const fileStream = fs.createReadStream(doc.file_path);
+      const fileStream = fs.createReadStream(resolvedPath);
       fileStream.pipe(res);
 
       console.log(`📥 Download started: ${fileName}`);
@@ -487,19 +669,15 @@ router.get('/', async (req, res) => {
 
       // STEP 1 FIX: Map to consistent format expected by frontend
       const mappedDocuments = documents.map(row => {
-        // Check if file exists on disk
-        let fileExists = true;
-        try {
-          if (row.file_path) fs.accessSync(row.file_path);
-        } catch {
-          fileExists = false;
-        }
+        const resolvedPath = resolveDocumentFilePath(row);
+        const fileExists = Boolean(resolvedPath);
+        const links = buildDocumentLinks(req, row.id, row.stored_name);
 
         return {
           id: row.id,
           original_name: row.original_name,
           file_name: row.stored_name,
-          file_path: row.file_path,
+          file_path: resolvedPath || row.file_path,
           file_type: row.file_type,
           file_size: row.file_size,
           main_category: row.main_category || 'Uncategorized',
@@ -516,11 +694,11 @@ router.get('/', async (req, res) => {
           category: row.main_category || 'Uncategorized',
           size: row.file_size,
           uploadDate: row.created_at,
-          url: buildFileUrl(row.main_category, row.stored_name, row.id),
+          url: buildFileUrl(req, row.main_category, row.stored_name, row.id),
           // Additional URLs
-          file_url: `http://localhost:5000/api/documents/${row.id}/file`,
-          download_url: `http://localhost:5000/api/documents/${row.id}/download`,
-          static_url: `http://localhost:5000/documents/${encodeURIComponent(row.stored_name)}`
+          file_url: links.file_url,
+          download_url: links.download_url,
+          static_url: links.static_url
         };
       });
 
@@ -534,10 +712,10 @@ router.get('/', async (req, res) => {
 
     } catch (error) {
       console.error('[DOCUMENTS] Database query error:', error);
-      return getDocumentsFromFileSystem(res);
+      return getDocumentsFromFileSystem(req, res);
     }
   } else {
-    return getDocumentsFromFileSystem(res);
+    return getDocumentsFromFileSystem(req, res);
   }
 });
 
@@ -545,8 +723,10 @@ router.get('/', async (req, res) => {
 // STEP 1 FIX: FILE SYSTEM FALLBACK WITH CONSISTENT FORMAT
 // ═══════════════════════════════════════════════════════════════
 
-function getDocumentsFromFileSystem(res) {
+function getDocumentsFromFileSystem(req, res) {
   console.log('[DOCUMENTS] Using file system fallback');
+
+  const baseUrl = getRequestBaseUrl(req);
   
   const possiblePaths = [
     uploadDir,
@@ -565,7 +745,7 @@ function getDocumentsFromFileSystem(res) {
     
     if (fs.existsSync(dirPath)) {
       console.log(`[DOCUMENTS] Found directory: ${dirPath}`);
-      const documents = getFilesRecursively(dirPath, '');
+      const documents = getFilesRecursively(dirPath, '', baseUrl);
       allDocuments = allDocuments.concat(documents);
     }
   }
@@ -598,7 +778,7 @@ function getDocumentsFromFileSystem(res) {
 // RECURSIVE FILE FINDER (UPDATED FORMAT)
 // ═══════════════════════════════════════════════════════════════
 
-function getFilesRecursively(dirPath, relativePath) {
+function getFilesRecursively(dirPath, relativePath, baseUrl) {
   const documents = [];
   
   try {
@@ -617,7 +797,7 @@ function getFilesRecursively(dirPath, relativePath) {
       }
       
       if (stat.isDirectory()) {
-        const subDocs = getFilesRecursively(fullPath, path.join(relativePath, item));
+        const subDocs = getFilesRecursively(fullPath, path.join(relativePath, item), baseUrl);
         documents.push(...subDocs);
       } else {
         const ext = path.extname(item).toLowerCase();
@@ -652,9 +832,9 @@ function getFilesRecursively(dirPath, relativePath) {
             uploadDate: stat.birthtime.toISOString(),
             modifiedDate: stat.mtime.toISOString(),
             path: fullPath,
-            url: buildFileUrl(category, item, generatedId),
+            url: `${baseUrl}/documents/${encodeURIComponent(item)}`,
             // Additional URLs
-            static_url: `http://localhost:5000/documents/${encodeURIComponent(item)}`
+            static_url: `${baseUrl}/documents/${encodeURIComponent(item)}`
           };
 
           documents.push(doc);
@@ -703,12 +883,8 @@ router.get('/:id/info', async (req, res) => {
       }
 
       // Check if file exists
-      let fileExists = true;
-      try {
-        if (doc.file_path) fs.accessSync(doc.file_path);
-      } catch {
-        fileExists = false;
-      }
+      const resolvedPath = resolveDocumentFilePath(doc);
+      const fileExists = Boolean(resolvedPath);
       
       res.json({
         success: true,
@@ -717,7 +893,7 @@ router.get('/:id/info', async (req, res) => {
           id: doc.id,
           original_name: doc.original_name,
           file_name: doc.stored_name,
-          file_path: doc.file_path,
+          file_path: resolvedPath || doc.file_path,
           file_type: doc.file_type,
           file_size: doc.file_size,
           main_category: doc.main_category,
@@ -824,10 +1000,11 @@ router.delete('/:id', async (req, res) => {
         return res.status(404).json({ success: false, error: 'Document not found' });
       }
       
-      if (doc.file_path && fs.existsSync(doc.file_path)) {
+      const resolvedPath = resolveDocumentFilePath(doc);
+      if (resolvedPath && fs.existsSync(resolvedPath)) {
         try {
-          fs.unlinkSync(doc.file_path);
-          console.log(`[DOCUMENTS] Deleted file: ${doc.file_path}`);
+          fs.unlinkSync(resolvedPath);
+          console.log(`[DOCUMENTS] Deleted file: ${resolvedPath}`);
         } catch (e) {
           console.log(`[DOCUMENTS] Could not delete file: ${e.message}`);
         }

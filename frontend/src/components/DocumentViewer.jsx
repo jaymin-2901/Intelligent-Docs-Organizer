@@ -211,6 +211,21 @@ const DocumentViewer = ({
   const [summaryData, setSummaryData] = useState(null);
 
   const fullscreenActive = isFullscreen || isPseudoFullscreen;
+  const hasBlockingLayer = showSummaryModal || showDeleteConfirm;
+
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent('dv-immersive-change', {
+      detail: { active: Boolean(doc) && fullscreenActive },
+    }));
+  }, [doc, fullscreenActive]);
+
+  useEffect(() => {
+    return () => {
+      window.dispatchEvent(new CustomEvent('dv-immersive-change', {
+        detail: { active: false },
+      }));
+    };
+  }, []);
 
   const enterFullscreen = useCallback(async () => {
     await requestElementFullscreen(containerRef.current);
@@ -221,7 +236,9 @@ const DocumentViewer = ({
     await exitAnyFullscreen();
   }, []);
 
-  const toggleFullscreen = useCallback(async () => {
+  const toggleFullscreen = useCallback(async (options = {}) => {
+    const preferPseudo = Boolean(options?.preferPseudo);
+
     if (isPseudoFullscreen) {
       setIsPseudoFullscreen(false);
       return;
@@ -232,6 +249,11 @@ const DocumentViewer = ({
       return;
     }
 
+    if (preferPseudo) {
+      setIsPseudoFullscreen(true);
+      return;
+    }
+
     try {
       await enterFullscreen();
     } catch {
@@ -239,6 +261,30 @@ const DocumentViewer = ({
       setIsPseudoFullscreen(true);
     }
   }, [enterFullscreen, isPseudoFullscreen, leaveFullscreen]);
+
+  const closeTopLayer = useCallback(async () => {
+    if (showDeleteConfirm) {
+      setShowDeleteConfirm(false);
+      return true;
+    }
+
+    if (showSummaryModal) {
+      setShowSummaryModal(false);
+      return true;
+    }
+
+    if (getFullscreenElement()) {
+      await leaveFullscreen().catch(() => {});
+      return true;
+    }
+
+    if (isPseudoFullscreen) {
+      setIsPseudoFullscreen(false);
+      return true;
+    }
+
+    return false;
+  }, [isPseudoFullscreen, leaveFullscreen, showDeleteConfirm, showSummaryModal]);
 
   // Sync
   useEffect(() => { setPageInput(String(pageNumber)); }, [pageNumber]);
@@ -370,13 +416,33 @@ const DocumentViewer = ({
   }, []);
 
   useEffect(() => {
-    const onToggle = () => {
-      toggleFullscreen().catch(() => {});
+    const onToggle = (e) => {
+      const canHandleFullscreen = Boolean(doc) || fullscreenActive;
+      if (!canHandleFullscreen) {
+        return;
+      }
+
+      const source = typeof e?.detail?.source === 'string' ? e.detail.source : '';
+      const preferPseudo = source === 'gesture-fullscreen';
+
+      if (e?.detail && typeof e.detail === 'object') {
+        e.detail.consumed = true;
+      }
+
+      toggleFullscreen({ preferPseudo }).catch(() => {});
     };
 
-    const onEnter = () => {
+    const onEnter = (e) => {
+      if (!doc) {
+        return;
+      }
+
       if (fullscreenActive) {
         return;
+      }
+
+      if (e?.detail && typeof e.detail === 'object') {
+        e.detail.consumed = true;
       }
 
       enterFullscreen().catch(() => {
@@ -391,22 +457,62 @@ const DocumentViewer = ({
       window.removeEventListener('dv-fullscreen-toggle', onToggle);
       window.removeEventListener('dv-fullscreen-enter', onEnter);
     };
-  }, [enterFullscreen, fullscreenActive, toggleFullscreen]);
+  }, [doc, enterFullscreen, fullscreenActive, toggleFullscreen]);
 
   useEffect(() => {
-    const onNextPage = () => { goNext(); };
-    const onPrevPage = () => { goPrev(); };
-    const onCloseDoc = () => { onClose?.(); };
+    const onNextPage = () => {
+      if (!doc || hasBlockingLayer) return;
+      goNext();
+    };
+
+    const onPrevPage = () => {
+      if (!doc || hasBlockingLayer) return;
+      goPrev();
+    };
+
+    const onCloseDoc = (e) => {
+      const canHandleClose = Boolean(doc) || fullscreenActive || hasBlockingLayer;
+      if (!canHandleClose) {
+        return;
+      }
+
+      if (e?.detail && typeof e.detail === 'object') {
+        e.detail.consumed = true;
+      }
+
+      closeTopLayer()
+        .then((closedLayer) => {
+          if (!closedLayer && doc) {
+            onClose?.();
+          }
+        })
+        .catch(() => {
+          if (doc) {
+            onClose?.();
+          }
+        });
+    };
+
+    const onCloseLayer = (e) => {
+      closeTopLayer().then((closedLayer) => {
+        if (closedLayer && e?.detail && typeof e.detail === 'object') {
+          e.detail.consumed = true;
+        }
+      }).catch(() => {});
+    };
 
     const onSummary = () => {
+      if (!doc || hasBlockingLayer) return;
       generateSummary().catch(() => {});
     };
 
     const onZoomReset = () => {
+      if (!doc || hasBlockingLayer) return;
       applyZoomChange(1.0);
     };
 
     const onZoomAt = (e) => {
+      if (!doc || hasBlockingLayer) return;
       const delta = Number(e?.detail?.delta || 0);
       if (!delta) return;
       const anchor = e?.detail?.anchor || null;
@@ -416,6 +522,7 @@ const DocumentViewer = ({
     window.addEventListener('dv-next-page', onNextPage);
     window.addEventListener('dv-prev-page', onPrevPage);
     window.addEventListener('dv-close-doc', onCloseDoc);
+    window.addEventListener('dv-close-layer', onCloseLayer);
     window.addEventListener('dv-summary', onSummary);
     window.addEventListener('dv-zoom-reset', onZoomReset);
     window.addEventListener('dv-zoom-at', onZoomAt);
@@ -424,11 +531,23 @@ const DocumentViewer = ({
       window.removeEventListener('dv-next-page', onNextPage);
       window.removeEventListener('dv-prev-page', onPrevPage);
       window.removeEventListener('dv-close-doc', onCloseDoc);
+      window.removeEventListener('dv-close-layer', onCloseLayer);
       window.removeEventListener('dv-summary', onSummary);
       window.removeEventListener('dv-zoom-reset', onZoomReset);
       window.removeEventListener('dv-zoom-at', onZoomAt);
     };
-  }, [goNext, goPrev, onClose, generateSummary, applyZoomChange, zoom]);
+  }, [
+    applyZoomChange,
+    closeTopLayer,
+    doc,
+    fullscreenActive,
+    generateSummary,
+    goNext,
+    goPrev,
+    hasBlockingLayer,
+    onClose,
+    zoom,
+  ]);
 
   useEffect(() => {
     if (!doc) {
@@ -504,6 +623,16 @@ const DocumentViewer = ({
       const amount = Number(e?.detail?.amount || 0);
       if (!direction || !amount) return;
 
+      if (!doc) return;
+
+      if (e?.detail && typeof e.detail === 'object') {
+        e.detail.consumed = true;
+      }
+
+      if (hasBlockingLayer) {
+        return;
+      }
+
       const el = scrollRef.current;
       if (!el) return;
 
@@ -527,7 +656,7 @@ const DocumentViewer = ({
 
     window.addEventListener('dv-scroll', handle);
     return () => { window.removeEventListener('dv-scroll', handle); clearTimeout(scrollTimerRef.current); };
-  }, [showScrollIndicator]);
+  }, [doc, hasBlockingLayer, showScrollIndicator]);
 
   // ════════════════════════════════════════════════════════════════
   // TOUCH SWIPE (horizontal → page change)
@@ -608,15 +737,15 @@ const DocumentViewer = ({
           break;
         case 'Escape':
           e.preventDefault();
-          if (getFullscreenElement()) {
-            leaveFullscreen().catch(() => {});
-            break;
-          }
-          if (isPseudoFullscreen) {
-            setIsPseudoFullscreen(false);
-            break;
-          }
-          onClose?.();
+          closeTopLayer()
+            .then((closedLayer) => {
+              if (!closedLayer) {
+                onClose?.();
+              }
+            })
+            .catch(() => {
+              onClose?.();
+            });
           break;
         case 'Delete': case 'Backspace':
           if (e.shiftKey) { e.preventDefault(); setShowDeleteConfirm(true); }
@@ -626,7 +755,7 @@ const DocumentViewer = ({
     };
     window.addEventListener('keydown', handle);
     return () => window.removeEventListener('keydown', handle);
-  }, [doc, totalPages, zoom, goNext, goPrev, changePage, onClose, leaveFullscreen, toggleFullscreen, isPseudoFullscreen, generateSummary, applyZoomChange]);
+  }, [doc, totalPages, zoom, goNext, goPrev, changePage, onClose, closeTopLayer, toggleFullscreen, generateSummary, applyZoomChange]);
 
   // ════════════════════════════════════════════════════════════════
   // SIDE NAV HOVER

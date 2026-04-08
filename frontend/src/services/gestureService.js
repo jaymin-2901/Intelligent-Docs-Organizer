@@ -15,7 +15,7 @@ class GestureService {
     this._intentionalClose   = false;
 
     this.config = {
-      wsUrl:           'ws://localhost:8765',
+      wsUrl:           import.meta.env.VITE_GESTURE_WS_URL || 'ws://localhost:8765',
       pingIntervalMs:  25000,
       reconnectBaseMs: 2000,
     };
