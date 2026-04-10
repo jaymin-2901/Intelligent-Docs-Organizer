@@ -38,10 +38,11 @@ const CONFIG = {
   SWIPE_PIXEL_THRESHOLD:      30,
   SWIPE_HORIZONTAL_THRESHOLD: 36,
   SWIPE_VERTICAL_THRESHOLD:   30,
-  SWIPE_MAX_TIME:            600,
+  SWIPE_MAX_TIME:            900,
+  SWIPE_MIN_SAMPLES:           3,
   SWIPE_MIN_DIRECTION:         1.4,
-  SWIPE_DIRECTION_CONSISTENCY: 0.72,
-  SWIPE_VELOCITY_THRESHOLD:   0.18,
+  SWIPE_DIRECTION_CONSISTENCY: 0.65,
+  SWIPE_VELOCITY_THRESHOLD:   0.14,
   HORIZONTAL_REBOUND_WINDOW: 1200,
   HORIZONTAL_REBOUND_THRESHOLD: 80,
   HORIZONTAL_REBOUND_VELOCITY: 0.26,
@@ -237,12 +238,22 @@ const GestureRecognition = ({ enabled, onGestureDetected, onStatusChange }) => {
     );
 
     const history = swipeHistoryRef.current;
-    if (history.length < 5) return null;
+    if (history.length < CONFIG.SWIPE_MIN_SAMPLES) return null;
 
     const oldest = history[0];
     const newest = history[history.length - 1];
     const dt = newest.t - oldest.t;
     if (dt < 100) return null;
+
+    const sampleCount = Math.max(1, history.length - 1);
+    const avgIntervalMs = dt / sampleCount;
+    const lowFpsMode = avgIntervalMs >= 75;
+    const velocityThreshold = lowFpsMode
+      ? CONFIG.SWIPE_VELOCITY_THRESHOLD * 0.75
+      : CONFIG.SWIPE_VELOCITY_THRESHOLD;
+    const consistencyThreshold = lowFpsMode
+      ? CONFIG.SWIPE_DIRECTION_CONSISTENCY * 0.85
+      : CONFIG.SWIPE_DIRECTION_CONSISTENCY;
 
     // Negate dx to compensate for CSS scaleX(-1) mirror.
     const dx = -(newest.x - oldest.x) * 640;
@@ -282,10 +293,10 @@ const GestureRecognition = ({ enabled, onGestureDetected, onStatusChange }) => {
 
     if (
       !inHorizontalLockout &&
-      vx > CONFIG.SWIPE_VELOCITY_THRESHOLD &&
+      vx > velocityThreshold &&
       vx > vy * CONFIG.SWIPE_MIN_DIRECTION &&
       Math.abs(dx) > CONFIG.SWIPE_HORIZONTAL_THRESHOLD &&
-      xConsistency >= CONFIG.SWIPE_DIRECTION_CONSISTENCY
+      xConsistency >= consistencyThreshold
     ) {
       const type = dx > 0 ? 'SWIPE_RIGHT' : 'SWIPE_LEFT';
 
@@ -303,7 +314,7 @@ const GestureRecognition = ({ enabled, onGestureDetected, onStatusChange }) => {
         now - horizontalGuard.lastAt < CONFIG.HORIZONTAL_REBOUND_WINDOW;
 
       if (oppositeWithinWindow) {
-        const reboundConsistency = Math.min(0.9, CONFIG.SWIPE_DIRECTION_CONSISTENCY + 0.12);
+        const reboundConsistency = Math.min(0.9, consistencyThreshold + 0.12);
         const reboundIsStrong =
           Math.abs(dx) > CONFIG.HORIZONTAL_REBOUND_THRESHOLD &&
           vx > CONFIG.HORIZONTAL_REBOUND_VELOCITY &&
@@ -329,10 +340,10 @@ const GestureRecognition = ({ enabled, onGestureDetected, onStatusChange }) => {
     }
 
     if (
-      vy > CONFIG.SWIPE_VELOCITY_THRESHOLD &&
+      vy > velocityThreshold &&
       vy > vx * CONFIG.SWIPE_MIN_DIRECTION &&
       Math.abs(dy) > CONFIG.SWIPE_VERTICAL_THRESHOLD &&
-      yConsistency >= CONFIG.SWIPE_DIRECTION_CONSISTENCY
+      yConsistency >= consistencyThreshold
     ) {
       swipeHistoryRef.current = history.slice(-1);
       const conf = Math.min(0.95, 0.72 + vy * 0.6);
@@ -621,9 +632,9 @@ const GestureRecognition = ({ enabled, onGestureDetected, onStatusChange }) => {
 
         hands.setOptions({
           maxNumHands:            1,
-          modelComplexity:        1,
-          minDetectionConfidence: 0.72,
-          minTrackingConfidence:  0.65,
+          modelComplexity:        0,
+          minDetectionConfidence: 0.65,
+          minTrackingConfidence:  0.55,
         });
 
         hands.onResults(onMediaPipeResults);
